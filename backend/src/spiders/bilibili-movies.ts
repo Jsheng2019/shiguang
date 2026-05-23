@@ -194,21 +194,17 @@ export class BilibiliMoviesSpider implements Spider {
 
   private async extractStreams(bvid?: string, avid?: number): Promise<VideoSource[]> {
     try {
-      const rawParams: Record<string, string | number> = {
-        qn: 80,
-        fnval: 1,
-        fourk: 1,
-      };
-      if (bvid) rawParams.bvid = bvid;
-      else if (avid) rawParams.avid = avid;
+      // 1. Get cid from video info
+      let cid: number | null = null;
+      const viewParams: Record<string, string | number> = {};
+      if (bvid) viewParams.bvid = bvid;
+      else if (avid) viewParams.avid = avid;
       else return [];
 
-      const params = await signParams(rawParams);
-
-      const resp = await axios.get(
-        'https://api.bilibili.com/x/player/playurl',
+      const viewResp = await axios.get(
+        'https://api.bilibili.com/x/web-interface/view',
         {
-          params,
+          params: viewParams,
           headers: {
             'User-Agent': UA,
             Referer: 'https://www.bilibili.com',
@@ -217,12 +213,42 @@ export class BilibiliMoviesSpider implements Spider {
         },
       );
 
+      cid = viewResp.data?.data?.cid;
+      if (!cid) {
+        const pages = viewResp.data?.data?.pages;
+        if (pages && pages.length > 0) cid = pages[0].cid;
+      }
+      if (!cid) return [];
+
+      // 2. Sign params for player API
+      const rawParams: Record<string, string | number> = {
+        bvid: bvid || '',
+        cid,
+        qn: 32,
+        fnval: 1,
+        platform: 'html5',
+      };
+      const params = await signParams(rawParams);
+
+      // 3. Call the wbi-signed player API
+      const resp = await axios.get(
+        'https://api.bilibili.com/x/player/wbi/playurl',
+        {
+          params,
+          headers: {
+            'User-Agent': UA,
+            Referer: 'https://www.bilibili.com',
+          },
+          timeout: 8000,
+        },
+      );
+
       const data = resp.data?.data as BiliPlayUrlData | undefined;
       if (!data?.durl) return [];
 
       const sources: VideoSource[] = [];
       const qualityLabels = data.accept_description || [];
-      const bestQuality = qualityLabels[0] || '720P';
+      const bestQuality = qualityLabels[0] || '480P';
 
       const qMap: Record<string, VideoSource['quality']> = {
         '1080P': '1080p', '1080p': '1080p',
@@ -235,7 +261,7 @@ export class BilibiliMoviesSpider implements Spider {
         if (!d.url) continue;
         sources.push({
           url: d.url,
-          quality: qMap[bestQuality] || '720p',
+          quality: qMap[bestQuality] || '480p',
           format: 'mp4',
         });
       }
