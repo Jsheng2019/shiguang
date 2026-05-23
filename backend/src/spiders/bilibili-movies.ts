@@ -73,19 +73,20 @@ export class BilibiliMoviesSpider implements Spider {
         resp.data?.data?.result ?? [];
       const results: SearchResult[] = [];
       const bvids: (string | undefined)[] = [];
+      const aids: (number | undefined)[] = [];
 
       for (const section of resultTypes) {
-        // Only process video results
         if (section.result_type !== 'video') continue;
 
         for (const v of section.data ?? []) {
           const title = v.title.replace(/<[^>]+>/g, '').trim();
           if (!title) continue;
+          if (!v.bvid && !v.aid) continue;
 
           const pic = v.pic.startsWith('//') ? `https:${v.pic}` : v.pic;
           const type = this.detectType(v.typename, v.tag || '');
           const rating = this.playToRating(v.play);
-          const sourceUrl = v.arcurl || `https://www.bilibili.com/video/${v.bvid}`;
+          const sourceUrl = v.arcurl || `https://www.bilibili.com/video/${v.bvid || `av${v.aid}`}`;
 
           results.push({
             title,
@@ -104,19 +105,25 @@ export class BilibiliMoviesSpider implements Spider {
             ],
           });
           bvids.push(v.bvid || undefined);
+          aids.push(v.aid || undefined);
         }
       }
 
-      // Limit to 20 results before enriching (so we don't waste API calls)
+      // Limit to 20 results before enriching
       const limited = results.slice(0, 20);
       const limitedBvids = bvids.slice(0, 20);
+      const limitedAids = aids.slice(0, 20);
 
       // Enrich top results with real video URLs via player API (parallel)
       const topN = Math.min(limited.length, 10);
       if (topN > 0) {
         const enrichResults = await Promise.allSettled(
-          limitedBvids.slice(0, topN).map(bvid =>
-            bvid ? this.extractStreams(bvid) : Promise.resolve([] as VideoSource[]),
+          limitedBvids.slice(0, topN).map((bvid, i) =>
+            bvid
+              ? this.extractStreams(bvid, undefined)
+              : limitedAids[i]
+                ? this.extractStreams(undefined, limitedAids[i])
+                : Promise.resolve([] as VideoSource[]),
           ),
         );
 

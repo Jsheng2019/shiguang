@@ -51,6 +51,7 @@ export class BilibiliFreeSpider implements Spider {
         resp.data?.data?.result ?? [];
       const results: SearchResult[] = [];
       const bvids: (string | undefined)[] = [];
+      const aids: (number | undefined)[] = [];
 
       for (const section of resultTypes) {
         if (section.result_type !== 'video') continue;
@@ -58,11 +59,12 @@ export class BilibiliFreeSpider implements Spider {
         for (const v of section.data ?? []) {
           const title = v.title.replace(/<[^>]+>/g, '').trim();
           if (!title) continue;
+          if (!v.bvid && !v.aid) continue;
 
           const pic = v.pic.startsWith('//') ? `https:${v.pic}` : v.pic;
           const type = this.detectType(v.typename, v.tag || '');
           const rating = this.playToRating(v.play);
-          const sourceUrl = v.arcurl || `https://www.bilibili.com/video/${v.bvid}`;
+          const sourceUrl = v.arcurl || `https://www.bilibili.com/video/${v.bvid || `av${v.aid}`}`;
 
           results.push({
             title,
@@ -81,6 +83,7 @@ export class BilibiliFreeSpider implements Spider {
             ],
           });
           bvids.push(v.bvid || undefined);
+          aids.push(v.aid || undefined);
         }
       }
 
@@ -88,8 +91,12 @@ export class BilibiliFreeSpider implements Spider {
       const topN = Math.min(results.length, 10);
       if (topN > 0) {
         const enrichResults = await Promise.allSettled(
-          bvids.slice(0, topN).map(bvid =>
-            bvid ? this.extractStreams(bvid) : Promise.resolve([] as VideoSource[]),
+          bvids.slice(0, topN).map((bvid, i) =>
+            bvid
+              ? this.extractStreams(bvid, undefined)
+              : aids[i]
+                ? this.extractStreams(undefined, aids[i])
+                : Promise.resolve([] as VideoSource[]),
           ),
         );
 
