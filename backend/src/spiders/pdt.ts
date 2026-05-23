@@ -123,7 +123,7 @@ export class PublicDomainTorrentsSpider implements Spider {
         .each((_, el) => {
           const cat = $(el).attr('href')?.toLowerCase() || '';
           if (cat.includes('documentary')) type = 'documentary';
-          if (cat.includes('serial')) type = 'series';
+          if (cat.includes('serial')) type = 'tvseries';
         });
 
       // Extract torrent download links

@@ -1,4 +1,4 @@
-import type { SearchResult, Spider } from './base.js';
+import type { SearchResult, Spider, FilterOptions, BrowseResponse, VideoType } from './base.js';
 import { ExampleSpider } from './example.js';
 import { InternetArchiveSpider } from './free-kukan.js';
 import { VimeoFreeSpider } from './vimeo-free.js';
@@ -51,4 +51,64 @@ export class SpiderRegistry {
 
     return items;
   }
+
+  async searchWithFilters(filters: FilterOptions): Promise<BrowseResponse> {
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? 20;
+    const query = typeToQuery(filters.type);
+
+    // Search across all spiders with the generated query
+    let results = await this.searchAll(query);
+
+    // Apply post-search filters
+    if (filters.type) {
+      results = results.filter((r) => r.type === filters.type);
+    }
+    if (filters.year) {
+      results = results.filter((r) => r.year === filters.year);
+    }
+    if (filters.decade) {
+      results = results.filter(
+        (r) => r.year != null && Math.floor(r.year / 10) * 10 === filters.decade,
+      );
+    }
+
+    // Sort
+    if (filters.sort === 'rating') {
+      results.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+    } else if (filters.sort === 'latest') {
+      results.sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
+    }
+    // 'hot' sort: keep default order (search relevance)
+
+    // Deduplicate by title
+    const seen = new Set<string>();
+    const deduped = results.filter((r) => {
+      const key = r.title.toLowerCase().trim();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    const total = deduped.length;
+    const start = (page - 1) * pageSize;
+    const items = deduped.slice(start, start + pageSize);
+
+    return { items, total, page, pageSize, hasMore: start + pageSize < total };
+  }
+}
+
+const typeQueryMap: Record<VideoType, string> = {
+  movie: 'movie film',
+  tvseries: 'tv series episode',
+  variety: 'variety show',
+  anime: 'anime',
+  documentary: 'documentary',
+  shortdrama: 'short drama',
+  sports: 'sports',
+  education: 'education',
+};
+
+function typeToQuery(type?: VideoType): string {
+  return type ? typeQueryMap[type] ?? type : 'movie film tv show';
 }

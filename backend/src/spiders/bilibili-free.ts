@@ -180,7 +180,7 @@ export class BilibiliFreeSpider implements Spider {
       t.includes('剧集') || t.includes('连载') || t.includes('番剧') ||
       t.includes('动画') || tg.includes('番剧')
     )
-      return 'series';
+      return 'tvseries';
     return 'movie';
   }
 

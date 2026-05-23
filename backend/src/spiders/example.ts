@@ -23,7 +23,7 @@ export class ExampleSpider implements Spider {
       {
         title: 'Example Documentary Series',
         year: 2018,
-        type: 'series',
+        type: 'tvseries',
         poster: 'https://placehold.co/300x450?text=Example+Series',
         sourceName: this.name,
         sourceUrl: 'https://example.com/series/2',
