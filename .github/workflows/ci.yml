@@ -51,6 +51,8 @@ jobs:
       - run: npx tsc --noEmit
       - name: Expo web export
         run: npx expo export --platform web
+      - name: Fix absolute paths for GitHub Pages
+        run: sed -i 's|src="/_expo/|src="./_expo/|g; s|href="/_expo/|href="./_expo/|g' dist/index.html
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v4
         with:
