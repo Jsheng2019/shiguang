@@ -5,8 +5,8 @@ import { VimeoFreeSpider } from './vimeo-free.js';
 import { YouTubeSpider } from './youtube.js';
 import { PublicDomainTorrentsSpider } from './pdt.js';
 import { BilibiliFreeSpider } from './bilibili-free.js';
-import { OpenverseSpider } from './openverse.js';
-import { ImdbFreeSpider } from './imdb-free.js';
+import { DailymotionSpider } from './dailymotion.js';
+import { PixabaySpider } from './pixabay.js';
 import { MixkitSpider } from './mixkit.js';
 
 export class SpiderRegistry {
@@ -19,8 +19,8 @@ export class SpiderRegistry {
     this.register(new YouTubeSpider());
     this.register(new PublicDomainTorrentsSpider());
     this.register(new BilibiliFreeSpider());
-    this.register(new OpenverseSpider());
-    this.register(new ImdbFreeSpider());
+    this.register(new DailymotionSpider());
+    this.register(new PixabaySpider());
     this.register(new MixkitSpider());
   }
 
