@@ -52,7 +52,10 @@ jobs:
       - name: Expo web export
         run: npx expo export --platform web
       - name: Fix absolute paths for GitHub Pages
-        run: sed -i 's|src="/_expo/|src="./_expo/|g; s|href="/_expo/|href="./_expo/|g' dist/index.html
+        run: |
+          sed -i 's|src="/_expo/|src="./_expo/|g; s|href="/_expo/|href="./_expo/|g' dist/index.html
+          sed -i 's|<div id="root"></div>|<div id="root"><div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0f0f0f;color:#a0a0a0;font-family:sans-serif;font-size:16px">Loading...</div></div>|' dist/index.html
+          sed -i 's|body {|body { background: #0f0f0f; |' dist/index.html
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v4
         with:

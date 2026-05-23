@@ -20,7 +20,10 @@ export interface SearchResult {
   sourceUrl: string;
 }
 
-const DEFAULT_BASE_URL = 'http://10.0.2.2:3000';
+const DEFAULT_BASE_URL =
+  typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? '' // Use relative path on production web
+    : 'http://10.0.2.2:3000';
 
 class ApiClient {
   private client;
