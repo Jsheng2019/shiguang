@@ -1,0 +1,36 @@
+import { Router } from 'express';
+import type { SpiderRegistry } from '../spiders/registry.js';
+import type { SearchResult } from '../spiders/base.js';
+
+export function createSearchRouter(registry: SpiderRegistry): Router {
+  const router = Router();
+
+  router.get('/search', async (req, res, next) => {
+    try {
+      const q = (req.query.q as string) ?? '';
+      if (!q.trim()) {
+        res.status(400).json({ error: 'query parameter "q" is required' });
+        return;
+      }
+
+      const results = await registry.searchAll(q);
+      const sorted = sortByRelevance(results, q);
+
+      res.json({ results: sorted, total: sorted.length });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  return router;
+}
+
+/** Simple relevance sort: more query tokens matched in the title = higher rank. */
+function sortByRelevance(items: SearchResult[], query: string): SearchResult[] {
+  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return [...items].sort((a, b) => {
+    const aScore = tokens.filter((t) => a.title.toLowerCase().includes(t)).length;
+    const bScore = tokens.filter((t) => b.title.toLowerCase().includes(t)).length;
+    return bScore - aScore;
+  });
+}
