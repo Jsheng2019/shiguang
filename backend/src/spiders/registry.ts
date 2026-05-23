@@ -16,6 +16,15 @@ import { CzzySpider } from './czzy.js';
 
 export class SpiderRegistry {
   private spiders: Map<string, Spider> = new Map();
+  private pendingRequests = new Map<string, Promise<any>>();
+
+  async dedupe<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const existing = this.pendingRequests.get(key);
+    if (existing) return existing as Promise<T>;
+    const promise = fn().finally(() => this.pendingRequests.delete(key));
+    this.pendingRequests.set(key, promise);
+    return promise;
+  }
 
   constructor() {
     this.register(new ExampleSpider());

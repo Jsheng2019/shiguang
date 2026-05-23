@@ -31,6 +31,37 @@ function RatingBadge({ rating }: { rating: number }) {
   );
 }
 
+function PosterImage({ uri }: { uri: string }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  if (error) {
+    return (
+      <View style={styles.placeholder}>
+        <Text style={styles.placeholderIcon}>🎬</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.posterContainer}>
+      <Image
+        source={{ uri }}
+        style={styles.poster}
+        resizeMode="cover"
+        onLoadStart={() => setLoading(true)}
+        onLoad={() => setLoading(false)}
+        onError={() => { setLoading(false); setError(true); }}
+      />
+      {loading && (
+        <View style={styles.imageLoadingOverlay}>
+          <View style={styles.shimmer} />
+        </View>
+      )}
+    </View>
+  );
+}
+
 function SkeletonCard() {
   return (
     <View style={[styles.card, styles.skeletonCard]}>
@@ -46,8 +77,6 @@ function SkeletonCard() {
 }
 
 export default function VideoCard({ item, onPress, isTV, focused, skeleton }: VideoCardProps) {
-  const [imgError, setImgError] = useState(false);
-
   if (skeleton) return <SkeletonCard />;
 
   const qualityBadge =
@@ -61,19 +90,15 @@ export default function VideoCard({ item, onPress, isTV, focused, skeleton }: Vi
       activeOpacity={0.7}
       style={[styles.card, isTV && styles.tvCard, focused && styles.focused]}
     >
-      <View style={styles.posterContainer}>
-        {item.poster && !imgError ? (
-          <Image
-            source={{ uri: item.poster }}
-            style={styles.poster}
-            onError={() => setImgError(true)}
-          />
+      <View style={styles.posterWrapper}>
+        {item.poster ? (
+          <PosterImage uri={item.poster} />
         ) : (
           <View style={styles.placeholder}>
-            <Text style={styles.placeholderText}>?</Text>
+            <Text style={styles.placeholderIcon}>🎬</Text>
           </View>
         )}
-        {qualityBadge && !imgError && (
+        {qualityBadge && (
           <View style={styles.qualityBadge}>
             <Text style={styles.qualityText}>{qualityBadge}</Text>
           </View>
@@ -128,9 +153,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     transform: [{ scale: 1.05 }],
   },
-  posterContainer: {
+  posterWrapper: {
     position: 'relative',
     aspectRatio: 2 / 3,
+  },
+  posterContainer: {
+    ...StyleSheet.absoluteFillObject,
   },
   poster: {
     width: '100%',
@@ -140,15 +168,24 @@ const styles = StyleSheet.create({
   skeletonPoster: {
     backgroundColor: Colors.surface,
   },
+  imageLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shimmer: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: Colors.surfaceLight,
+  },
   placeholder: {
     flex: 1,
     backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  placeholderText: {
-    fontSize: 32,
-    color: Colors.textTertiary,
+  placeholderIcon: {
+    fontSize: 28,
   },
   qualityBadge: {
     position: 'absolute',

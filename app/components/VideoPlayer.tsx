@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,18 @@ import {
 } from 'react-native';
 import { ResizeMode, Video, AVPlaybackStatus } from 'expo-av';
 import { VideoSource } from '../services/api';
+import { watchHistory } from '../services/watch-history';
 import { Colors } from '../theme/colors';
 import { useI18n } from '../services/i18n';
 
 interface VideoPlayerProps {
   source: VideoSource;
   onClose?: () => void;
+  watchMeta?: {
+    url: string;
+    title: string;
+    poster?: string;
+  };
 }
 
 const SPEEDS = [0.5, 1, 1.5, 2] as const;
@@ -28,7 +34,7 @@ function formatTime(ms: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function VideoPlayer({ source, onClose }: VideoPlayerProps) {
+export default function VideoPlayer({ source, onClose, watchMeta }: VideoPlayerProps) {
   const { t } = useI18n();
 
   // For embed sources (YouTube, etc.), open externally
@@ -67,6 +73,42 @@ export default function VideoPlayer({ source, onClose }: VideoPlayerProps) {
   const position = status?.isLoaded ? status.positionMillis ?? 0 : 0;
   const duration = status?.isLoaded ? status.durationMillis ?? 0 : 0;
   const progress = duration > 0 ? position / duration : 0;
+
+  // Save watch progress every 10 seconds during playback
+  const positionRef = useRef(position);
+  const durationRef = useRef(duration);
+  positionRef.current = position;
+  durationRef.current = duration;
+  useEffect(() => {
+    if (!watchMeta || !isPlaying || duration <= 0) return;
+    const interval = setInterval(() => {
+      if (positionRef.current > 0) {
+        watchHistory.updateProgress(
+          watchMeta.url,
+          watchMeta.title,
+          watchMeta.poster,
+          positionRef.current,
+          durationRef.current,
+        );
+      }
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [watchMeta, isPlaying, duration]);
+
+  // Save final position on unmount
+  useEffect(() => {
+    return () => {
+      if (watchMeta && positionRef.current > 0) {
+        watchHistory.updateProgress(
+          watchMeta.url,
+          watchMeta.title,
+          watchMeta.poster,
+          positionRef.current,
+          durationRef.current,
+        );
+      }
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleStatusUpdate = useCallback((s: AVPlaybackStatus) => {
     setStatus(s);

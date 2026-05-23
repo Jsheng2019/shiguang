@@ -4,7 +4,7 @@ import type { SearchResult } from '../spiders/base.js';
 import type { TmdbService } from '../services/tmdb.js';
 import { cache } from '../services/cache.js';
 
-const SEARCH_CACHE_TTL = 300; // 5 minutes
+const SEARCH_CACHE_TTL = 120_000; // 2 minutes
 
 export function createSearchRouter(
   registry: SpiderRegistry,
@@ -15,12 +15,15 @@ export function createSearchRouter(
   router.get('/search', async (req, res, next) => {
     try {
       const q = (req.query.q as string) ?? '';
+      const page = Math.max(1, Number(req.query.page) || 1);
+      const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20));
+
       if (!q.trim()) {
         res.status(400).json({ error: 'query parameter "q" is required' });
         return;
       }
 
-      const cacheKey = `search:${q.trim()}`;
+      const cacheKey = `search:${q.trim()}:${page}:${pageSize}`;
       const cached = cache.get<{ results: SearchResult[]; total: number }>(cacheKey);
       if (cached) {
         res.json(cached);
@@ -35,7 +38,10 @@ export function createSearchRouter(
       }
 
       const sorted = sortByRelevance(results, q);
-      const payload = { results: sorted, total: sorted.length };
+      const total = sorted.length;
+      const start = (page - 1) * pageSize;
+      const paged = sorted.slice(start, start + pageSize);
+      const payload = { results: paged, total };
 
       cache.set(cacheKey, payload, SEARCH_CACHE_TTL);
       res.json(payload);

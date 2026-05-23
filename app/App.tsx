@@ -1,5 +1,4 @@
-import React, { Component } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useCallback } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -9,6 +8,7 @@ import SearchScreen from './screens/SearchScreen';
 import DetailScreen from './screens/DetailScreen';
 import FavoritesScreen from './screens/FavoritesScreen';
 import CategoryScreen from './screens/CategoryScreen';
+import ErrorBoundary from './components/ErrorBoundary';
 import { I18nProvider, useI18n } from './services/i18n';
 import { Colors } from './theme/colors';
 
@@ -27,50 +27,6 @@ const DarkTheme = {
     notification: Colors.primary,
   },
 };
-
-class ErrorBoundary extends Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error: string }
-> {
-  state = { hasError: false, error: '' };
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error: error.message };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <View style={errorStyles.container}>
-          <Text style={errorStyles.title}>App Error</Text>
-          <Text style={errorStyles.message}>{this.state.error}</Text>
-        </View>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-const errorStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#0f0f0f',
-    padding: 20,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#e50914',
-    marginBottom: 10,
-  },
-  message: {
-    fontSize: 14,
-    color: '#a0a0a0',
-    textAlign: 'center',
-  },
-});
 
 function AppNavigator() {
   const { t } = useI18n();

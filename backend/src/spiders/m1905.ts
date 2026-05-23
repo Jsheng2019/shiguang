@@ -121,6 +121,19 @@ export class M1905Spider implements Spider {
       const yearText = $('.year, .info-year, .meta-year, .film-year').first().text().match(/\d{4}/)?.[0];
       const ratingText = $('.rating, .score, .star').first().text().trim();
 
+      // Parse richer metadata
+      const infoText = $('.info, .detail-info, .film-info, .meta, .movie-info').text();
+      const director = this.parseMeta(infoText, '导演');
+      const actorsRaw = this.parseMeta(infoText, '主演') || this.parseMeta(infoText, '演员');
+      const actors = actorsRaw ? actorsRaw.split(/[,，\/、]/).map((a) => a.trim()).filter(Boolean) : undefined;
+      const region = this.parseMeta(infoText, '地区') || this.parseMeta(infoText, '国家') || this.parseMeta(infoText, '产地');
+      const language = this.parseMeta(infoText, '语言');
+      const duration = this.parseMeta(infoText, '时长') || this.parseMeta(infoText, '片长');
+      const directorEl = $('.director, .info-director').first().text().trim().replace(/^导演[：:]?\s*/, '');
+      const actorsEl = $('.actor, .info-actor, .cast').first().text().trim().replace(/^主演[：:]?\s*/, '');
+      const regionEl = $('.region, .info-region').first().text().trim().replace(/^地区[：:]?\s*/, '');
+      const durationEl = $('.duration, .info-duration, .runtime').first().text().trim().replace(/^(时长|片长)[：:]?\s*/, '');
+
       if (!title) return null;
 
       const posterUrl = poster.startsWith('//') ? `https:${poster}` :
@@ -137,6 +150,11 @@ export class M1905Spider implements Spider {
         poster: posterUrl || undefined,
         rating: isNaN(rating) ? undefined : Math.min(10, Math.max(0, rating)),
         description,
+        director: director || directorEl || undefined,
+        actors: actors || (actorsEl ? actorsEl.split(/[,，\/、]/).map((a) => a.trim()).filter(Boolean) : undefined),
+        region: region || regionEl || undefined,
+        language: language || undefined,
+        duration: duration || durationEl || undefined,
         sourceName: this.name,
         sourceUrl: url,
         sources: sources.length > 0 ? sources : [{ url, quality: '720p', format: 'embed' }],
@@ -210,5 +228,21 @@ export class M1905Spider implements Spider {
       seen.add(s.url);
       return true;
     });
+  }
+
+  /** Extract a metadata field from info text by label */
+  private parseMeta(text: string, label: string): string | undefined {
+    const patterns = [
+      new RegExp(`${label}[：:]\\s*([^\\n]+)`, 'i'),
+      new RegExp(`${label}\\s*([^\\n]+)`, 'i'),
+    ];
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const val = match[1].trim();
+        if (val && val.length < 100) return val;
+      }
+    }
+    return undefined;
   }
 }

@@ -16,6 +16,12 @@ export interface VideoSource {
   headers?: Record<string, string>;
 }
 
+export interface Episode {
+  title: string;    // e.g. "第1集"
+  url: string;      // play URL
+  sourceName?: string;
+}
+
 export interface SearchResult {
   title: string;
   year?: number;
@@ -27,6 +33,13 @@ export interface SearchResult {
   sources: VideoSource[];
   sourceName: string;     // which spider found this
   sourceUrl: string;      // original page URL
+  director?: string;
+  actors?: string[];
+  region?: string;
+  language?: string;
+  duration?: string;      // e.g. "120分钟"
+  episodes?: Episode[];   // for series
+  related?: SearchResult[]; // recommendations
 }
 
 export interface FilterOptions {

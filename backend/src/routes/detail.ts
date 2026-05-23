@@ -5,7 +5,7 @@ import type { SubtitlesService } from '../services/subtitles.js';
 import type { SubtitleInfo } from '../services/subtitles.js';
 import { cache } from '../services/cache.js';
 
-const DETAIL_CACHE_TTL = 600; // 10 minutes
+const DETAIL_CACHE_TTL = 600_000; // 10 minutes
 
 export function createDetailRouter(
   registry: SpiderRegistry,

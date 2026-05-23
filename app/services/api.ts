@@ -7,6 +7,12 @@ export interface VideoSource {
   headers?: Record<string, string>;
 }
 
+export interface Episode {
+  title: string;
+  url: string;
+  sourceName?: string;
+}
+
 export interface SearchResult {
   title: string;
   year?: number;
@@ -18,6 +24,13 @@ export interface SearchResult {
   sources: VideoSource[];
   sourceName: string;
   sourceUrl: string;
+  director?: string;
+  actors?: string[];
+  region?: string;
+  language?: string;
+  duration?: string;
+  episodes?: Episode[];
+  related?: SearchResult[];
 }
 
 export type VideoType =
@@ -247,15 +260,17 @@ class ApiClient {
     this.client = axios.create({ baseURL: this.baseURL, timeout: 15000 });
   }
 
-  async search(query: string): Promise<SearchResult[]> {
+  async search(query: string, page = 1, pageSize = 20): Promise<{ results: SearchResult[]; total: number }> {
     try {
-      const { data } = await this.client.get<{ results: SearchResult[] }>('/api/search', {
-        params: { q: query },
+      const { data } = await this.client.get<{ results: SearchResult[]; total: number }>('/api/search', {
+        params: { q: query, page, pageSize },
       });
       this.demoMode = false;
-      return data.results;
+      return data;
     } catch {
-      return demoBackend.search(query);
+      const results = demoBackend.search(query);
+      const start = (page - 1) * pageSize;
+      return { results: results.slice(start, start + pageSize), total: results.length };
     }
   }
 
@@ -270,6 +285,18 @@ class ApiClient {
       return data.result ?? null;
     } catch {
       return demoBackend.getDetail(url);
+    }
+  }
+
+  async getRecommendations(url: string, spider: string): Promise<SearchResult[]> {
+    if (this.demoMode) return [];
+    try {
+      const { data } = await this.client.get<{ recommendations: SearchResult[] }>('/api/recommendations', {
+        params: { url, spider },
+      });
+      return data.recommendations ?? [];
+    } catch {
+      return [];
     }
   }
 
