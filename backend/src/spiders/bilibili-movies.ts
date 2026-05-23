@@ -96,7 +96,7 @@ export class BilibiliMoviesSpider implements Spider {
               {
                 url: v.arcurl,
                 quality: '720p' as const,
-                format: 'mp4' as const,
+                format: 'embed' as const,
               },
             ],
           });
@@ -163,7 +163,7 @@ export class BilibiliMoviesSpider implements Spider {
       description,
       sourceName: this.name,
       sourceUrl: url,
-      sources: sources.length > 0 ? sources : [{ url, quality: '720p', format: 'mp4' }],
+      sources: sources.length > 0 ? sources : [{ url, quality: '720p', format: 'embed' }],
     };
   }
 

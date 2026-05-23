@@ -53,8 +53,16 @@ export class SpiderRegistry {
   }
 
   async searchAll(query: string): Promise<SearchResult[]> {
+    const TIMEOUT_MS = 8000;
     const results = await Promise.allSettled(
-      this.getAll().map((spider) => spider.search(query)),
+      this.getAll().map((spider) =>
+        Promise.race([
+          spider.search(query),
+          new Promise<SearchResult[]>((_, reject) =>
+            setTimeout(() => reject(new Error(`timeout: ${spider.name}`)), TIMEOUT_MS),
+          ),
+        ]),
+      ),
     );
 
     const items: SearchResult[] = [];
@@ -62,7 +70,7 @@ export class SpiderRegistry {
       if (result.status === 'fulfilled') {
         items.push(...result.value);
       }
-      // Silently skip failed spiders so one failure doesn't break everything
+      // Silently skip timed-out or failed spiders
     }
 
     return items;

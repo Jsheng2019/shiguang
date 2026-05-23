@@ -73,7 +73,7 @@ export class BilibiliFreeSpider implements Spider {
               {
                 url: v.arcurl,
                 quality: '720p',
-                format: 'mp4',
+                format: 'embed',
               },
             ],
           });
