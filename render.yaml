@@ -1,10 +1,9 @@
 services:
   - type: web
     name: shiguang-backend
-    env: node
+    runtime: node
     region: singapore
-    plan: free
-    buildCommand: cd backend && npm ci && npm run build
+    buildCommand: cd backend && npm ci --include=dev && npm run build
     startCommand: cd backend && node dist/server.js
     envVars:
       - key: NODE_ENV
