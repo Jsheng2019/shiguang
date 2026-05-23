@@ -5,9 +5,14 @@ import { VimeoFreeSpider } from './vimeo-free.js';
 import { YouTubeSpider } from './youtube.js';
 import { PublicDomainTorrentsSpider } from './pdt.js';
 import { BilibiliFreeSpider } from './bilibili-free.js';
+import { BilibiliMoviesSpider } from './bilibili-movies.js';
 import { DailymotionSpider } from './dailymotion.js';
 import { PixabaySpider } from './pixabay.js';
 import { MixkitSpider } from './mixkit.js';
+import { LibvioSpider } from './libvio.js';
+import { IYFSpider } from './iyf.js';
+import { M1905Spider } from './m1905.js';
+import { CzzySpider } from './czzy.js';
 
 export class SpiderRegistry {
   private spiders: Map<string, Spider> = new Map();
@@ -22,6 +27,11 @@ export class SpiderRegistry {
     this.register(new DailymotionSpider());
     this.register(new PixabaySpider());
     this.register(new MixkitSpider());
+    this.register(new LibvioSpider());
+    this.register(new IYFSpider());
+    this.register(new M1905Spider());
+    this.register(new CzzySpider());
+    this.register(new BilibiliMoviesSpider());
   }
 
   register(spider: Spider): void {
