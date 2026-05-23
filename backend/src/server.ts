@@ -144,7 +144,7 @@ app.get('/api/hot', async (_req, res, next) => {
     const cached = cache.get<{ results: SearchResult[]; total: number }>('hot');
     if (cached) { res.json(cached); return; }
 
-    const results = await registry.dedupe('search:hot', () => registry.searchAll('hot popular trending'));
+    const results = await registry.dedupe('search:hot', () => registry.searchAll('热门电影 热门电视剧 最新视频'));
     const seen = new Set<string>();
     const deduped = results.filter((r) => {
       const key = r.title.toLowerCase().trim();

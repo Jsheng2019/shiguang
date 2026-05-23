@@ -1,13 +1,9 @@
 import type { SearchResult, Spider, FilterOptions, BrowseResponse, VideoType } from './base.js';
 import { InternetArchiveSpider } from './free-kukan.js';
 import { VimeoFreeSpider } from './vimeo-free.js';
-import { YouTubeSpider } from './youtube.js';
-import { PublicDomainTorrentsSpider } from './pdt.js';
 import { BilibiliFreeSpider } from './bilibili-free.js';
 import { BilibiliMoviesSpider } from './bilibili-movies.js';
 import { DailymotionSpider } from './dailymotion.js';
-import { PixabaySpider } from './pixabay.js';
-import { MixkitSpider } from './mixkit.js';
 import { M1905Spider } from './m1905.js';
 
 export class SpiderRegistry {
@@ -30,14 +26,16 @@ export class SpiderRegistry {
     //   - libvio: search endpoint returns 404
     //   - iyf: client-side rendered SPA, can't scrape with HTTP
     //   - czzy: Cloudflare/429 blocks all requests
+    //
+    // Removed spiders (poor Chinese-content experience):
+    //   - youtube: videos can't play in-app, require external browser
+    //   - pdt: mostly old English public domain films
+    //   - pixabay: stock footage, not movies
+    //   - mixkit: stock footage, not movies
     this.register(new InternetArchiveSpider());
     this.register(new VimeoFreeSpider());
-    this.register(new YouTubeSpider());
-    this.register(new PublicDomainTorrentsSpider());
     this.register(new BilibiliFreeSpider());
     this.register(new DailymotionSpider());
-    this.register(new PixabaySpider());
-    this.register(new MixkitSpider());
     this.register(new M1905Spider());
     this.register(new BilibiliMoviesSpider());
   }

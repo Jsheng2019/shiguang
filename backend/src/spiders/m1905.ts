@@ -141,7 +141,7 @@ export class M1905Spider implements Spider {
     }
   }
 
-  private extractSources($: cheerio.CheerioAPI, html: string): VideoSource[] {
+  private extractSources($: cheerio.Root, html: string): VideoSource[] {
     const sources: VideoSource[] = [];
 
     // 1. 1905-specific: the video config is often embedded in a script as a player object
