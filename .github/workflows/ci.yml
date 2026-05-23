@@ -54,7 +54,9 @@ jobs:
       - name: Fix absolute paths for GitHub Pages
         run: |
           sed -i 's|src="/_expo/|src="./_expo/|g; s|href="/_expo/|href="./_expo/|g' dist/index.html
-          sed -i 's|<div id="root"></div>|<div id="root"><div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0f0f0f;color:#a0a0a0;font-family:sans-serif;font-size:16px">Loading...</div></div>|' dist/index.html
+          sed -i 's|<html lang="en">|<html lang="zh-CN">|' dist/index.html
+          sed -i 's|<title>拾光</title>|<title>拾光 - 免费影视</title>|' dist/index.html
+          sed -i 's|<div id="root"></div>|<div id="root"><div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0f0f0f;color:#a0a0a0;font-family:sans-serif;font-size:16px">拾光 · 加载中...</div></div>|' dist/index.html
           sed -i 's|body {|body { background: #0f0f0f; |' dist/index.html
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v4
@@ -126,7 +128,7 @@ jobs:
         run: |
           HTML=$(curl -s "https://jsheng2019.github.io/shiguang/")
           CHECKS=(
-            "<title>拾光</title>"
+            "<title>拾光 - 免费影视</title>"
             'id="root"'
             "<noscript>"
             "background: #0f0f0f"
