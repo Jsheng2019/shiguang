@@ -30,17 +30,22 @@ export class M1905Spider implements Spider {
       const $ = cheerio.load(html);
       const results: SearchResult[] = [];
 
-      // 1905 search results typically in a grid list
-      $('.search-result li, .video-list li, .grid-list li, .list-item, .pic-list li').each((_i, el) => {
+      // 1905 search results are in div.movie_box containers
+      // Actual HTML: div.movie_box > div.new_content > div.subject-box.subject-movie-box
+      //   > h2.title-mv > a[title]  (title with <b>(year)</b>)
+      //   > div.main > div.movie-pic > a.img-a > img  (poster)
+      //   > div.main > div.movie-pic > b.jb  (rating)
+      //   > ul.cont > li.star  (actors/description)
+      $('.subject-box.subject-movie-box').each((_i, el) => {
         const $el = $(el);
-        const linkEl = $el.find('a[href]').first();
+        const linkEl = $el.find('h2.title-mv > a').first();
         const href = linkEl.attr('href');
-        const title = linkEl.attr('title') || linkEl.text().trim() || $el.find('.title, .name, h3, h4').text().trim();
-        const imgEl = $el.find('img').first();
-        const poster = imgEl.attr('data-original') || imgEl.attr('data-src') || imgEl.attr('src') || '';
-        const metaText = $el.find('.meta, .info, .desc, .txt, .intro').text().trim();
-        const yearMatch = metaText.match(/\b(19\d{2}|20\d{2})\b/);
-        const ratingText = $el.find('.rating, .score, .star').first().text().trim();
+        const title = linkEl.attr('title') || linkEl.text().trim();
+        const imgEl = $el.find('.movie-pic img').first();
+        const poster = imgEl.attr('src') || imgEl.attr('data-original') || '';
+        const ratingText = $el.find('.jb').first().text().trim();
+        const yearMatch = linkEl.text().match(/\b(19\d{2}|20\d{2})\b/);
+        const descText = $el.find('.cont').text().trim();
 
         if (!title || !href) return;
 
@@ -56,40 +61,12 @@ export class M1905Spider implements Spider {
           type: 'movie',
           poster: posterUrl || undefined,
           rating: isNaN(rating) ? undefined : Math.min(10, Math.max(0, rating)),
-          description: metaText || undefined,
+          description: descText.replace(/简介：/, '').slice(0, 200) || undefined,
           sourceName: this.name,
           sourceUrl: fullUrl,
           sources: [{ url: fullUrl, quality: '720p', format: 'embed' }],
         });
       });
-
-      // Fallback: any link with video-related href patterns
-      if (results.length === 0) {
-        $('a[href*="/vod/"], a[href*="/video/"], a[href*="/play/"], a[href*="/film/"]').each((_i, el) => {
-          const $el = $(el);
-          const href = $el.attr('href');
-          const title = $el.attr('title') || $el.text().trim();
-          if (!title || !href) return;
-
-          const fullUrl = href.startsWith('http') ? href :
-            `${BASE}${href.startsWith('/') ? '' : '/'}${href}`;
-          if (results.some((r) => r.sourceUrl === fullUrl)) return;
-
-          const imgEl = $el.find('img').first();
-          const poster = (imgEl.attr('data-original') || imgEl.attr('src') || '');
-          const posterUrl = poster.startsWith('//') ? `https:${poster}` :
-            (poster.startsWith('http') || !poster) ? poster : `${BASE}${poster}`;
-
-          results.push({
-            title: title.replace(/<[^>]+>/g, '').trim(),
-            type: 'movie',
-            poster: posterUrl || undefined,
-            sourceName: this.name,
-            sourceUrl: fullUrl,
-            sources: [{ url: fullUrl, quality: '720p', format: 'embed' }],
-          });
-        });
-      }
 
       return results;
     } catch {

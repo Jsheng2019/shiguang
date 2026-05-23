@@ -48,16 +48,12 @@ export class BilibiliMoviesSpider implements Spider {
 
   async search(query: string): Promise<SearchResult[]> {
     try {
-      const resp = await axios.get<BiliSearchResponse>(
-        'https://api.bilibili.com/x/web-interface/search/type',
+      // Use the working search/all/v2 endpoint (same as bilibili-free) instead of
+      // the search/type endpoint which is blocked by Bilibili WAF (412).
+      const resp = await axios.get(
+        'https://api.bilibili.com/x/web-interface/search/all/v2',
         {
-          params: {
-            search_type: 'video',
-            keyword: query,
-            page: 1,
-            order: 'click',
-            duration: 4, // 4 = longer than 60min (full movies)
-          },
+          params: { keyword: query, page: 1, pagesize: 50 },
           headers: {
             'User-Agent': UA,
             Referer: 'https://www.bilibili.com',
@@ -68,36 +64,46 @@ export class BilibiliMoviesSpider implements Spider {
 
       if (resp.data?.code !== 0) return [];
 
-      const items = resp.data?.data?.result ?? [];
+      interface ResultSection {
+        result_type: string;
+        data?: BiliSearchItem[];
+      }
+      const resultTypes: ResultSection[] =
+        resp.data?.data?.result ?? [];
       const results: SearchResult[] = [];
 
-      for (const v of items) {
-        const title = v.title.replace(/<[^>]+>/g, '').trim();
-        if (!title) continue;
+      for (const section of resultTypes) {
+        // Only process video results
+        if (section.result_type !== 'video') continue;
 
-        const pic = v.pic.startsWith('//') ? `https:${v.pic}` : v.pic;
-        const type = this.detectType(v.typename, v.tag || '');
-        const rating = this.playToRating(v.play);
+        for (const v of section.data ?? []) {
+          const title = v.title.replace(/<[^>]+>/g, '').trim();
+          if (!title) continue;
 
-        results.push({
-          title,
-          type,
-          poster: pic,
-          rating,
-          description: v.description || undefined,
-          sourceName: this.name,
-          sourceUrl: v.arcurl,
-          sources: [
-            {
-              url: v.arcurl,
-              quality: '720p',
-              format: 'mp4',
-            },
-          ],
-        });
+          const pic = v.pic.startsWith('//') ? `https:${v.pic}` : v.pic;
+          const type = this.detectType(v.typename, v.tag || '');
+          const rating = this.playToRating(v.play);
+
+          results.push({
+            title,
+            type,
+            poster: pic,
+            rating,
+            description: v.description || undefined,
+            sourceName: this.name,
+            sourceUrl: v.arcurl,
+            sources: [
+              {
+                url: v.arcurl,
+                quality: '720p' as const,
+                format: 'mp4' as const,
+              },
+            ],
+          });
+        }
       }
 
-      return results;
+      return results.slice(0, 20);
     } catch {
       return [];
     }

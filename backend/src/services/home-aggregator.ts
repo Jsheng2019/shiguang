@@ -2,6 +2,9 @@ import type { SpiderRegistry } from '../spiders/registry.js';
 import type { HomePageData, CarouselItem, SearchResult, VideoType } from '../spiders/base.js';
 import { CATEGORIES } from './category-service.js';
 
+/** Spiders that primarily return Chinese-language content */
+const CHINESE_SPIDERS = new Set(['bilibili-free', 'bilibili-movies', 'm1905']);
+
 export class HomeAggregator {
   constructor(private registry: SpiderRegistry) {}
 
@@ -20,9 +23,32 @@ export class HomeAggregator {
     };
   }
 
+  /** Returns true if a result contains placeholder/demo content */
+  private isPlaceholder(r: { title: string; sourceUrl: string; poster?: string; sourceName?: string }): boolean {
+    return (
+      (r.sourceName === 'example') ||
+      r.sourceUrl.includes('example.com') ||
+      r.sourceUrl.includes('placehold.co') ||
+      (r.poster?.includes('example.com') ?? false) ||
+      (r.poster?.includes('placehold.co') ?? false) ||
+      r.title.toLowerCase().includes('demo') ||
+      r.title.toLowerCase() === 'the public domain film'
+    );
+  }
+
+  /** Sort: Chinese spider results first, then by rating */
+  private prioritiseChinese(results: SearchResult[]): SearchResult[] {
+    return [...results].sort((a, b) => {
+      const aCN = CHINESE_SPIDERS.has(a.sourceName) ? 1 : 0;
+      const bCN = CHINESE_SPIDERS.has(b.sourceName) ? 1 : 0;
+      if (aCN !== bCN) return bCN - aCN;
+      return (b.rating ?? 0) - (a.rating ?? 0);
+    });
+  }
+
   private async fetchBanners(): Promise<CarouselItem[]> {
-    // Search across all spiders for popular content to use as banners
-    const queries = ['热门电影', '最新电视剧', 'popular movie'];
+    // Search across all spiders for popular Chinese content to use as banners
+    const queries = ['热门电影', '最新电影', '最新电视剧'];
     const results = await Promise.allSettled(
       queries.map((q) => this.registry.searchAll(q)),
     );
@@ -32,6 +58,7 @@ export class HomeAggregator {
     for (const result of results) {
       if (result.status !== 'fulfilled') continue;
       for (const r of result.value) {
+        if (this.isPlaceholder(r)) continue;
         const key = r.title.toLowerCase().trim();
         if (seen.has(key)) continue;
         seen.add(key);
@@ -51,7 +78,7 @@ export class HomeAggregator {
   }
 
   private async fetchHotList(): Promise<SearchResult[]> {
-    const queries = ['热门电影', 'hot movie', 'popular film', 'trending'];
+    const queries = ['热门电影', '最新电影', '最新电视剧', '综艺', '动漫', 'hot movie'];
     const results = await Promise.allSettled(
       queries.map((q) => this.registry.searchAll(q)),
     );
@@ -61,6 +88,7 @@ export class HomeAggregator {
     for (const result of results) {
       if (result.status !== 'fulfilled') continue;
       for (const r of result.value) {
+        if (this.isPlaceholder(r)) continue;
         const key = r.title.toLowerCase().trim();
         if (seen.has(key)) continue;
         seen.add(key);
@@ -68,31 +96,32 @@ export class HomeAggregator {
       }
     }
 
-    // Sort by rating descending, then by title
-    items.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
-
-    return items.slice(0, 30);
+    // Sort: Chinese sources first, then by rating
+    return this.prioritiseChinese(items).slice(0, 30);
   }
 
   private async fetchLatestByCategory(): Promise<
     { type: VideoType; items: SearchResult[] }[]
   > {
     const categoryQueries: { type: VideoType; query: string }[] = [
-      { type: 'movie', query: '最新电影 new movie' },
-      { type: 'tvseries', query: '最新电视剧 new tv series' },
-      { type: 'variety', query: '综艺 variety show' },
-      { type: 'anime', query: '动漫 anime' },
-      { type: 'documentary', query: '纪录片 documentary' },
-      { type: 'shortdrama', query: '短剧 short drama' },
-      { type: 'sports', query: '体育 sports' },
-      { type: 'education', query: '教育 education' },
+      { type: 'movie', query: '最新电影' },
+      { type: 'tvseries', query: '最新电视剧' },
+      { type: 'variety', query: '综艺' },
+      { type: 'anime', query: '动漫' },
+      { type: 'documentary', query: '纪录片' },
+      { type: 'shortdrama', query: '短剧' },
+      { type: 'sports', query: '体育' },
+      { type: 'education', query: '教育' },
     ];
 
     const settled = await Promise.allSettled(
       categoryQueries.map((cq) =>
         this.registry.searchAll(cq.query).then((results) => ({
           type: cq.type,
-          items: results.filter((r) => r.type === cq.type).slice(0, 12),
+          items: results
+            .filter((r) => !this.isPlaceholder(r))
+            .filter((r) => r.type === cq.type)
+            .slice(0, 12),
         })),
       ),
     );

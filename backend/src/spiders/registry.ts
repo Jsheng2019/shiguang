@@ -1,5 +1,4 @@
 import type { SearchResult, Spider, FilterOptions, BrowseResponse, VideoType } from './base.js';
-import { ExampleSpider } from './example.js';
 import { InternetArchiveSpider } from './free-kukan.js';
 import { VimeoFreeSpider } from './vimeo-free.js';
 import { YouTubeSpider } from './youtube.js';
@@ -9,10 +8,7 @@ import { BilibiliMoviesSpider } from './bilibili-movies.js';
 import { DailymotionSpider } from './dailymotion.js';
 import { PixabaySpider } from './pixabay.js';
 import { MixkitSpider } from './mixkit.js';
-import { LibvioSpider } from './libvio.js';
-import { IYFSpider } from './iyf.js';
 import { M1905Spider } from './m1905.js';
-import { CzzySpider } from './czzy.js';
 
 export class SpiderRegistry {
   private spiders: Map<string, Spider> = new Map();
@@ -27,7 +23,13 @@ export class SpiderRegistry {
   }
 
   constructor() {
-    this.register(new ExampleSpider());
+    // Note: example spider intentionally excluded — produces placeholder data
+    // (placehold.co images, example.com URLs). See Bug 2 in PM findings.
+    //
+    // Broken spiders removed (unreachable from Render/Singapore):
+    //   - libvio: search endpoint returns 404
+    //   - iyf: client-side rendered SPA, can't scrape with HTTP
+    //   - czzy: Cloudflare/429 blocks all requests
     this.register(new InternetArchiveSpider());
     this.register(new VimeoFreeSpider());
     this.register(new YouTubeSpider());
@@ -36,10 +38,7 @@ export class SpiderRegistry {
     this.register(new DailymotionSpider());
     this.register(new PixabaySpider());
     this.register(new MixkitSpider());
-    this.register(new LibvioSpider());
-    this.register(new IYFSpider());
     this.register(new M1905Spider());
-    this.register(new CzzySpider());
     this.register(new BilibiliMoviesSpider());
   }
 
@@ -118,16 +117,16 @@ export class SpiderRegistry {
 }
 
 const typeQueryMap: Record<VideoType, string> = {
-  movie: 'movie film',
-  tvseries: 'tv series episode',
-  variety: 'variety show',
-  anime: 'anime',
-  documentary: 'documentary',
-  shortdrama: 'short drama',
-  sports: 'sports',
-  education: 'education',
+  movie: '电影',
+  tvseries: '电视剧',
+  variety: '综艺',
+  anime: '动漫',
+  documentary: '纪录片',
+  shortdrama: '短剧',
+  sports: '体育',
+  education: '教育',
 };
 
 function typeToQuery(type?: VideoType): string {
-  return type ? typeQueryMap[type] ?? type : 'movie film tv show';
+  return type ? typeQueryMap[type] ?? type : '电影 电视剧 综艺';
 }
