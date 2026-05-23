@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { SearchResult, Spider, VideoSource } from './base.js';
+import { signParams } from './bilibili-wbi.js';
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -137,14 +138,16 @@ export class BilibiliFreeSpider implements Spider {
    */
   private async extractStreams(bvid?: string, avid?: number): Promise<VideoSource[]> {
     try {
-      const params: Record<string, string | number> = {
-        qn: 80, // 1080p
-        fnval: 1, // return durl (progressive download URLs)
+      const rawParams: Record<string, string | number> = {
+        qn: 80,
+        fnval: 1,
         fourk: 1,
       };
-      if (bvid) params.bvid = bvid;
-      else if (avid) params.avid = avid;
+      if (bvid) rawParams.bvid = bvid;
+      else if (avid) rawParams.avid = avid;
       else return [];
+
+      const params = await signParams(rawParams);
 
       const resp = await axios.get(
         'https://api.bilibili.com/x/player/playurl',
