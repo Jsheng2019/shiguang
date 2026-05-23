@@ -2,6 +2,9 @@ import { Router } from 'express';
 import type { SpiderRegistry } from '../spiders/registry.js';
 import type { SearchResult } from '../spiders/base.js';
 import type { TmdbService } from '../services/tmdb.js';
+import { cache } from '../services/cache.js';
+
+const SEARCH_CACHE_TTL = 300; // 5 minutes
 
 export function createSearchRouter(
   registry: SpiderRegistry,
@@ -17,6 +20,13 @@ export function createSearchRouter(
         return;
       }
 
+      const cacheKey = `search:${q.trim()}`;
+      const cached = cache.get<{ results: SearchResult[]; total: number }>(cacheKey);
+      if (cached) {
+        res.json(cached);
+        return;
+      }
+
       let results = await registry.searchAll(q);
 
       // Optionally enrich with TMDB metadata
@@ -25,8 +35,10 @@ export function createSearchRouter(
       }
 
       const sorted = sortByRelevance(results, q);
+      const payload = { results: sorted, total: sorted.length };
 
-      res.json({ results: sorted, total: sorted.length });
+      cache.set(cacheKey, payload, SEARCH_CACHE_TTL);
+      res.json(payload);
     } catch (err) {
       next(err);
     }

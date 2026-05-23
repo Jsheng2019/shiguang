@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,12 @@ import {
   SafeAreaView,
   Platform,
 } from 'react-native';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
 import { api, SearchResult, VideoSource } from '../services/api';
 import VideoPlayer from '../components/VideoPlayer';
 import { Colors } from '../theme/colors';
+import { storage } from '../services/storage';
+import { useI18n } from '../services/i18n';
 
 type DetailParams = {
   Detail: { item: SearchResult };
@@ -35,10 +37,20 @@ function groupByQuality(sources: VideoSource[]): QualityGroup[] {
 }
 
 function RatingDisplay({ rating }: { rating: number }) {
-  const stars = rating >= 8 ? '★★★★★' :
-    rating >= 6 ? '★★★★' :
-    rating >= 4 ? '★★★' : '★★';
-  const color = rating >= 7 ? Colors.success : rating >= 5 ? Colors.warning : Colors.textSecondary;
+  const stars =
+    rating >= 8
+      ? '★★★★★'
+      : rating >= 6
+        ? '★★★★'
+        : rating >= 4
+          ? '★★★'
+          : '★★';
+  const color =
+    rating >= 7
+      ? Colors.success
+      : rating >= 5
+        ? Colors.warning
+        : Colors.textSecondary;
   const fill = Math.min(rating / 10, 1);
 
   return (
@@ -88,15 +100,22 @@ const ratingStyles = StyleSheet.create({
 
 export default function DetailScreen() {
   const route = useRoute<RouteProp<DetailParams, 'Detail'>>();
+  const navigation = useNavigation<any>();
   const initialItem = route.params?.item;
+  const { t } = useI18n();
   const isTV = Platform.isTV;
 
   const [detail, setDetail] = useState<SearchResult | null>(initialItem);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [playingSource, setPlayingSource] = useState<VideoSource | null>(null);
+  const [isFav, setIsFav] = useState(false);
 
+  // Load detail and check favorite status on mount
   useEffect(() => {
+    if (initialItem) {
+      storage.isFavorite(initialItem.sourceUrl).then(setIsFav);
+    }
     loadDetail();
   }, []);
 
@@ -107,12 +126,36 @@ export default function DetailScreen() {
       const data = await api.getDetail(initialItem.sourceUrl, initialItem.sourceName);
       if (data) setDetail(data);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to load details';
+      const msg = e instanceof Error ? e.message : t('videoError');
       setError(msg);
     } finally {
       setLoading(false);
     }
   };
+
+  const toggleFavorite = useCallback(async () => {
+    if (!detail) return;
+    if (isFav) {
+      await storage.removeFavorite(detail.sourceUrl);
+      setIsFav(false);
+    } else {
+      await storage.addFavorite(detail);
+      setIsFav(true);
+    }
+  }, [detail, isFav]);
+
+  // Set up header right button for favorite
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={toggleFavorite} style={styles.favBtn}>
+          <Text style={[styles.favIcon, isFav && styles.favIconActive]}>
+            {isFav ? '★' : '☆'}
+          </Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, toggleFavorite, isFav]);
 
   if (playingSource) {
     return (
@@ -131,7 +174,10 @@ export default function DetailScreen() {
         {/* Poster + Info hero section */}
         <View style={[styles.hero, isTV && styles.tvHero]}>
           {detail?.poster ? (
-            <Image source={{ uri: detail.poster }} style={[styles.poster, isTV && styles.tvPoster]} />
+            <Image
+              source={{ uri: detail.poster }}
+              style={[styles.poster, isTV && styles.tvPoster]}
+            />
           ) : (
             <View style={[styles.posterPlaceholder, isTV && styles.tvPoster]} />
           )}
@@ -159,14 +205,16 @@ export default function DetailScreen() {
               )}
             </View>
             {detail?.rating != null && <RatingDisplay rating={detail.rating} />}
-            <Text style={styles.sourceLine}>Source: {detail?.sourceName}</Text>
+            <Text style={styles.sourceLine}>
+              {t('sources')}: {detail?.sourceName}
+            </Text>
           </View>
         </View>
 
         {/* Description section */}
         {showDescription && (
           <View style={styles.descriptionSection}>
-            <Text style={styles.sectionTitle}>Description</Text>
+            <Text style={styles.sectionTitle}>{t('description')}</Text>
             <Text style={styles.descriptionText}>{detail.description}</Text>
           </View>
         )}
@@ -185,7 +233,7 @@ export default function DetailScreen() {
           <View style={styles.centerBox}>
             <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity onPress={loadDetail} style={styles.retryBtn}>
-              <Text style={styles.retryText}>Retry</Text>
+              <Text style={styles.retryText}>{t('retry')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -193,7 +241,7 @@ export default function DetailScreen() {
         {/* Sources */}
         {qualityGroups.length > 0 && (
           <View style={styles.sourcesSection}>
-            <Text style={styles.sectionTitle}>Sources</Text>
+            <Text style={styles.sectionTitle}>{t('sources')}</Text>
             {qualityGroups.map((group) => (
               <View key={group.quality} style={styles.qualityGroup}>
                 <Text style={styles.qualityLabel}>{group.quality}</Text>
@@ -216,7 +264,7 @@ export default function DetailScreen() {
 
         {/* No sources */}
         {!loading && qualityGroups.length === 0 && !error && (
-          <Text style={styles.noSources}>No sources available</Text>
+          <Text style={styles.noSources}>{t('noSources')}</Text>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -373,5 +421,16 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     paddingVertical: 40,
+  },
+  favBtn: {
+    marginRight: 8,
+    padding: 4,
+  },
+  favIcon: {
+    fontSize: 24,
+    color: Colors.textSecondary,
+  },
+  favIconActive: {
+    color: Colors.warning,
   },
 });

@@ -3,12 +3,14 @@ import {
   View,
   Text,
   TouchableOpacity,
+  ActivityIndicator,
   StyleSheet,
   Platform,
 } from 'react-native';
 import { ResizeMode, Video, AVPlaybackStatus } from 'expo-av';
 import { VideoSource } from '../services/api';
 import { Colors } from '../theme/colors';
+import { useI18n } from '../services/i18n';
 
 interface VideoPlayerProps {
   source: VideoSource;
@@ -26,11 +28,14 @@ function formatTime(ms: number): string {
 }
 
 export default function VideoPlayer({ source, onClose }: VideoPlayerProps) {
+  const { t } = useI18n();
   const videoRef = useRef<Video>(null);
   const [status, setStatus] = useState<AVPlaybackStatus | null>(null);
   const [showControls, setShowControls] = useState(true);
   const [speedIdx, setSpeedIdx] = useState(1); // default 1x
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [loadingVideo, setLoadingVideo] = useState(true);
   const progressTrackRef = useRef<View>(null);
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -38,6 +43,21 @@ export default function VideoPlayer({ source, onClose }: VideoPlayerProps) {
   const position = status?.isLoaded ? status.positionMillis ?? 0 : 0;
   const duration = status?.isLoaded ? status.durationMillis ?? 0 : 0;
   const progress = duration > 0 ? position / duration : 0;
+
+  const handleStatusUpdate = useCallback((s: AVPlaybackStatus) => {
+    setStatus(s);
+    if (!s.isLoaded) {
+      if (s.error) {
+        setPlaybackError(s.error);
+        setLoadingVideo(false);
+      }
+      // not loaded but no error yet = still loading
+      return;
+    }
+    // Successfully loaded — clear any prior error and mark loaded
+    setPlaybackError(null);
+    setLoadingVideo(false);
+  }, []);
 
   const hideControlsAfterDelay = useCallback(() => {
     if (controlsTimer.current) clearTimeout(controlsTimer.current);
@@ -100,7 +120,7 @@ export default function VideoPlayer({ source, onClose }: VideoPlayerProps) {
   const handleProgressBarPress = useCallback(
     async (event: { nativeEvent: { locationX: number } }) => {
       if (!videoRef.current || !duration) return;
-      progressTrackRef.current?.measureInWindow((x, y, width) => {
+      progressTrackRef.current?.measureInWindow((_x, _y, width) => {
         const ratio = Math.max(0, Math.min(1, event.nativeEvent.locationX / width));
         const newPos = ratio * duration;
         videoRef.current?.setPositionAsync(newPos);
@@ -110,7 +130,37 @@ export default function VideoPlayer({ source, onClose }: VideoPlayerProps) {
     [duration, hideControlsAfterDelay],
   );
 
+  const handleRetry = useCallback(() => {
+    setPlaybackError(null);
+    setLoadingVideo(true);
+    if (videoRef.current) {
+      videoRef.current.loadAsync(
+        { uri: source.url, headers: source.headers },
+        { shouldPlay: true },
+      );
+    }
+  }, [source]);
+
   const currentSpeed = SPEEDS[speedIdx];
+
+  // Error state
+  if (playbackError) {
+    return (
+      <View style={[styles.container, styles.errorContainer]}>
+        <Text style={styles.errorIcon}>!</Text>
+        <Text style={styles.errorTitle}>{t('videoError')}</Text>
+        <Text style={styles.errorHint}>{t('videoErrorHint')}</Text>
+        <View style={styles.errorActions}>
+          <TouchableOpacity onPress={handleRetry} style={styles.errorBtn}>
+            <Text style={styles.errorBtnText}>{t('retry')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={styles.errorBtnSecondary}>
+            <Text style={styles.errorBtnSecondaryText}>X {t('details')}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, isFullscreen && styles.fullscreen]}>
@@ -122,9 +172,17 @@ export default function VideoPlayer({ source, onClose }: VideoPlayerProps) {
           resizeMode={ResizeMode.CONTAIN}
           shouldPlay
           useNativeControls={false}
-          onPlaybackStatusUpdate={setStatus}
+          onPlaybackStatusUpdate={handleStatusUpdate}
         />
       </TouchableOpacity>
+
+      {/* Loading overlay */}
+      {loadingVideo && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>{t('loading')}</Text>
+        </View>
+      )}
 
       {showControls && (
         <View style={styles.controls} pointerEvents="box-none">
@@ -313,5 +371,67 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     marginLeft: -7,
     top: 5,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: Colors.text,
+    fontSize: 13,
+    marginTop: 8,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+    aspectRatio: 16 / 9,
+  },
+  errorIcon: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: Colors.error,
+    marginBottom: 12,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  errorHint: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  errorActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  errorBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  errorBtnText: {
+    color: Colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  errorBtnSecondary: {
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  errorBtnSecondaryText: {
+    color: Colors.textSecondary,
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

@@ -11,25 +11,42 @@ import {
   Platform,
 } from 'react-native';
 import { Colors } from '../theme/colors';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { api, SearchResult } from '../services/api';
 import VideoCard from '../components/VideoCard';
-
-const MAX_RECENT = 5;
-
-type RecentSearch = { query: string; timestamp: number };
-
-// Simple in-memory fallback if AsyncStorage not available
-let globalRecentSearches: RecentSearch[] = [];
+import { storage } from '../services/storage';
+import { useI18n } from '../services/i18n';
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
+  const { t, toggleLang } = useI18n();
   const [query, setQuery] = useState('');
   const [trending, setTrending] = useState<SearchResult[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(true);
-  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>(() => globalRecentSearches);
   const [refreshing, setRefreshing] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [favoritesCount, setFavoritesCount] = useState(0);
   const isTV = Platform.isTV;
+
+  // Load search history and favorites from storage on mount and focus
+  useEffect(() => {
+    loadStorage();
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadStorage();
+    }, []),
+  );
+
+  const loadStorage = useCallback(async () => {
+    const [history, favs] = await Promise.all([
+      storage.getSearchHistory(),
+      storage.getFavorites(),
+    ]);
+    setRecentSearches(history);
+    setFavoritesCount(favs.length);
+  }, []);
 
   const loadTrending = useCallback(async () => {
     try {
@@ -47,50 +64,54 @@ export default function HomeScreen() {
     loadTrending();
   }, [loadTrending]);
 
-  const updateRecent = (updated: RecentSearch[]) => {
-    setRecentSearches(updated);
-    globalRecentSearches = updated;
-  };
-
-  const handleSearch = () => {
+  const handleSearch = useCallback(async () => {
     if (query.trim()) {
       const trimmed = query.trim();
-      const updated = [
-        { query: trimmed, timestamp: Date.now() },
-        ...recentSearches.filter((s) => s.query !== trimmed),
-      ].slice(0, MAX_RECENT);
-      updateRecent(updated);
+      await storage.addSearchHistory(trimmed);
+      setRecentSearches(await storage.getSearchHistory());
       navigation.navigate('Search', { query: trimmed });
     }
-  };
+  }, [query, navigation]);
 
-  const handleRecentPress = (q: string) => {
-    setQuery(q);
-    const updated = [
-      { query: q, timestamp: Date.now() },
-      ...recentSearches.filter((s) => s.query !== q),
-    ].slice(0, MAX_RECENT);
-    updateRecent(updated);
-    navigation.navigate('Search', { query: q });
-  };
+  const handleRecentPress = useCallback(
+    async (q: string) => {
+      setQuery(q);
+      await storage.addSearchHistory(q);
+      setRecentSearches(await storage.getSearchHistory());
+      navigation.navigate('Search', { query: q });
+    },
+    [navigation],
+  );
 
-  const handleClearRecent = () => {
-    updateRecent([]);
-  };
+  const handleRemoveRecent = useCallback(
+    async (q: string) => {
+      await storage.removeSearchHistory(q);
+      setRecentSearches(await storage.getSearchHistory());
+    },
+    [],
+  );
 
-  const handleRefresh = () => {
+  const handleClearRecent = useCallback(async () => {
+    await storage.clearSearchHistory();
+    setRecentSearches([]);
+  }, []);
+
+  const handleRefresh = useCallback(() => {
     setRefreshing(true);
     loadTrending();
-  };
+  }, [loadTrending]);
 
-  const handleTrendingPress = (item: SearchResult) => {
-    navigation.navigate('Detail', { item });
-  };
+  const handleTrendingPress = useCallback(
+    (item: SearchResult) => {
+      navigation.navigate('Detail', { item });
+    },
+    [navigation],
+  );
 
   const quickLinks = [
-    { label: 'Movies', query: 'movie', color: Colors.primary },
-    { label: 'Series', query: 'series', color: Colors.secondary },
-    { label: 'Documentary', query: 'documentary', color: Colors.success },
+    { label: t('movie'), query: 'movie', color: Colors.primary },
+    { label: t('series'), query: 'series', color: Colors.secondary },
+    { label: t('documentary'), query: 'documentary', color: Colors.success },
   ];
 
   return (
@@ -99,16 +120,24 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <>
             <View style={styles.headerSection}>
-              <View style={styles.header}>
-                <Text style={styles.logo}>拾光</Text>
-                <Text style={styles.tagline}>从互联网拾取免费光影</Text>
+              {/* Lang toggle top-right */}
+              <View style={styles.topBar}>
+                <View />
+                <TouchableOpacity onPress={toggleLang} style={styles.langBtn}>
+                  <Text style={styles.langBtnText}>{t('langSwitch')}</Text>
+                </TouchableOpacity>
               </View>
 
-              <Text style={styles.label}>What do you want to watch?</Text>
+              <View style={styles.header}>
+                <Text style={styles.logo}>{t('appName')}</Text>
+                <Text style={styles.tagline}>{t('tagline')}</Text>
+              </View>
+
+              <Text style={styles.label}>{t('searchPlaceholder')}</Text>
               <View style={styles.searchRow}>
                 <TextInput
                   style={[styles.input, isTV && styles.tvInput]}
-                  placeholder="Search movies, series..."
+                  placeholder={t('searchPlaceholder')}
                   placeholderTextColor={Colors.textTertiary}
                   value={query}
                   onChangeText={setQuery}
@@ -116,20 +145,18 @@ export default function HomeScreen() {
                   returnKeyType="search"
                 />
                 <TouchableOpacity onPress={handleSearch} style={styles.searchBtn}>
-                  <Text style={styles.searchBtnText}>Go</Text>
+                  <Text style={styles.searchBtnText}>{t('searchBtn')}</Text>
                 </TouchableOpacity>
               </View>
 
               {/* Quick browse links */}
-              <Text style={styles.sectionTitle}>Browse</Text>
+              <Text style={styles.sectionTitle}>{t('browse')}</Text>
               <View style={styles.linksRow}>
                 {quickLinks.map((item) => (
                   <TouchableOpacity
                     key={item.label}
                     style={[styles.linkCard, { borderLeftColor: item.color }]}
-                    onPress={() => {
-                      handleRecentPress(item.query);
-                    }}
+                    onPress={() => handleRecentPress(item.query)}
                   >
                     <Text style={styles.linkLabel}>{item.label}</Text>
                     <Text style={styles.linkArrow}>{'>'}</Text>
@@ -141,30 +168,57 @@ export default function HomeScreen() {
               {recentSearches.length > 0 && (
                 <View style={styles.recentSection}>
                   <View style={styles.recentHeader}>
-                    <Text style={styles.sectionTitle}>Recent Searches</Text>
+                    <Text style={styles.sectionTitle}>{t('recentSearches')}</Text>
                     <TouchableOpacity onPress={handleClearRecent}>
-                      <Text style={styles.clearText}>Clear</Text>
+                      <Text style={styles.clearText}>{t('clear')}</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={styles.recentChips}>
-                    {recentSearches.map((s) => (
-                      <TouchableOpacity
-                        key={s.query}
-                        style={styles.chip}
-                        onPress={() => handleRecentPress(s.query)}
-                      >
-                        <Text style={styles.chipText}>{s.query}</Text>
-                      </TouchableOpacity>
+                    {recentSearches.map((q) => (
+                      <View key={q} style={styles.chipRow}>
+                        <TouchableOpacity
+                          style={styles.chip}
+                          onPress={() => handleRecentPress(q)}
+                        >
+                          <Text style={styles.chipText}>{q}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.chipX}
+                          onPress={() => handleRemoveRecent(q)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text style={styles.chipXText}>X</Text>
+                        </TouchableOpacity>
+                      </View>
                     ))}
                   </View>
                 </View>
               )}
 
+              {/* Favorites entry */}
+              {favoritesCount > 0 && (
+                <TouchableOpacity
+                  style={styles.favEntry}
+                  onPress={() => navigation.navigate('Favorites')}
+                >
+                  <Text style={styles.favEntryIcon}>♡</Text>
+                  <View style={styles.favEntryInfo}>
+                    <Text style={styles.favEntryTitle}>{t('favorites')}</Text>
+                    <Text style={styles.favEntryCount}>
+                      {favoritesCount} {favoritesCount > 1 ? 'items' : 'item'}
+                    </Text>
+                  </View>
+                  <Text style={styles.favEntryArrow}>{'>'}</Text>
+                </TouchableOpacity>
+              )}
+
               {/* Trending header */}
               <View style={styles.trendingHeader}>
-                <Text style={styles.sectionTitle}>Trending</Text>
+                <Text style={styles.sectionTitle}>{t('trending')}</Text>
                 <TouchableOpacity onPress={handleRefresh} style={styles.refreshBtn}>
-                  <Text style={styles.refreshText}>{refreshing ? '...' : 'Refresh'}</Text>
+                  <Text style={styles.refreshText}>
+                    {refreshing ? '...' : t('refresh')}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -204,6 +258,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingTop: 8,
+  },
+  langBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: Colors.surface,
+    borderRadius: 6,
+  },
+  langBtnText: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
   },
   headerSection: {
     paddingHorizontal: 20,
@@ -306,15 +377,58 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
-  chip: {
+  chipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.surfaceLight,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
     borderRadius: 20,
+    paddingLeft: 14,
+  },
+  chip: {
+    paddingVertical: 8,
   },
   chipText: {
     color: Colors.text,
     fontSize: 13,
+  },
+  chipX: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+  chipXText: {
+    color: Colors.textTertiary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  favEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    padding: 16,
+    marginBottom: 20,
+    gap: 12,
+  },
+  favEntryIcon: {
+    fontSize: 24,
+    color: Colors.primary,
+  },
+  favEntryInfo: {
+    flex: 1,
+  },
+  favEntryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  favEntryCount: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  favEntryArrow: {
+    fontSize: 18,
+    color: Colors.textSecondary,
   },
   trendingHeader: {
     flexDirection: 'row',

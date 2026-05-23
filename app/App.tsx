@@ -6,6 +6,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import HomeScreen from './screens/HomeScreen';
 import SearchScreen from './screens/SearchScreen';
 import DetailScreen from './screens/DetailScreen';
+import FavoritesScreen from './screens/FavoritesScreen';
+import { I18nProvider, useI18n } from './services/i18n';
 import { Colors } from './theme/colors';
 
 const Stack = createNativeStackNavigator();
@@ -24,36 +26,51 @@ const DarkTheme = {
   },
 };
 
+function AppNavigator() {
+  const { t } = useI18n();
+
+  return (
+    <NavigationContainer theme={DarkTheme}>
+      <Stack.Navigator
+        screenOptions={{
+          headerStyle: { backgroundColor: Colors.background },
+          headerTintColor: Colors.text,
+          headerTitleStyle: { fontWeight: '600' },
+          contentStyle: { backgroundColor: Colors.background },
+        }}
+      >
+        <Stack.Screen
+          name="Home"
+          component={HomeScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Search"
+          component={SearchScreen}
+          options={{ title: t('search') }}
+        />
+        <Stack.Screen
+          name="Detail"
+          component={DetailScreen}
+          options={{ title: t('details') }}
+        />
+        <Stack.Screen
+          name="Favorites"
+          component={FavoritesScreen}
+          options={{ title: t('favorites') }}
+        />
+      </Stack.Navigator>
+      <StatusBar style="light" />
+    </NavigationContainer>
+  );
+}
+
 export default function App() {
   return (
     <SafeAreaProvider>
-      <NavigationContainer theme={DarkTheme}>
-        <Stack.Navigator
-          screenOptions={{
-            headerStyle: { backgroundColor: Colors.background },
-            headerTintColor: Colors.text,
-            headerTitleStyle: { fontWeight: '600' },
-            contentStyle: { backgroundColor: Colors.background },
-          }}
-        >
-          <Stack.Screen
-            name="Home"
-            component={HomeScreen}
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="Search"
-            component={SearchScreen}
-            options={{ title: 'Search' }}
-          />
-          <Stack.Screen
-            name="Detail"
-            component={DetailScreen}
-            options={{ title: 'Details' }}
-          />
-        </Stack.Navigator>
-        <StatusBar style="light" />
-      </NavigationContainer>
+      <I18nProvider>
+        <AppNavigator />
+      </I18nProvider>
     </SafeAreaProvider>
   );
 }
