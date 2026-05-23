@@ -20,10 +20,53 @@ export interface SearchResult {
   sourceUrl: string;
 }
 
+export type VideoType =
+  | 'movie' | 'tvseries' | 'variety' | 'anime'
+  | 'documentary' | 'shortdrama' | 'sports' | 'education';
+
+export interface FilterOptions {
+  type?: VideoType;
+  region?: 'mainland' | 'hongkong_taiwan' | 'japan_korea' | 'west' | 'other';
+  year?: number;
+  decade?: number;
+  sort?: 'latest' | 'hot' | 'rating';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CarouselItem {
+  title: string;
+  description?: string;
+  poster?: string;
+  sourceUrl: string;
+  type: VideoType;
+}
+
+export interface CategorySection {
+  type: VideoType;
+  label: string;
+  icon: string;
+}
+
+export interface HomePageData {
+  banners: CarouselItem[];
+  categories: CategorySection[];
+  hotList: SearchResult[];
+  latestByCategory: { type: VideoType; items: SearchResult[] }[];
+}
+
+export interface BrowseResponse {
+  items: SearchResult[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
 const DEFAULT_BASE_URL =
   typeof window !== 'undefined' && window.location.hostname !== 'localhost'
     ? '' // Use relative path on production web
-    : 'http://10.0.2.2:3000';
+    : 'http://localhost:3000';
 
 // Production backend URL — set to Render deployment or your own server.
 // Leave empty to use the same origin (for reverse-proxy setups).
@@ -227,6 +270,106 @@ class ApiClient {
       return data.result ?? null;
     } catch {
       return demoBackend.getDetail(url);
+    }
+  }
+
+  async getHome(): Promise<HomePageData> {
+    try {
+      const { data } = await this.client.get<HomePageData>('/api/home');
+      this.demoMode = false;
+      return data;
+    } catch {
+      return {
+        banners: demoData.slice(0, 4).map((item) => ({
+          title: item.title,
+          description: item.description,
+          poster: item.poster,
+          sourceUrl: item.sourceUrl,
+          type: item.type as VideoType,
+        })),
+        categories: [
+          { type: 'movie', label: '电影', icon: '🎬' },
+          { type: 'tvseries', label: '电视剧', icon: '📺' },
+          { type: 'variety', label: '综艺', icon: '🎭' },
+          { type: 'anime', label: '动漫', icon: '🎨' },
+          { type: 'documentary', label: '纪录片', icon: '🌍' },
+          { type: 'shortdrama', label: '短剧', icon: '🎪' },
+        ],
+        hotList: demoData.slice(0, 6),
+        latestByCategory: [
+          { type: 'movie', items: demoData.filter((d) => d.type === 'movie').slice(0, 4) },
+          { type: 'tvseries', items: demoData.filter((d) => d.type === 'series').slice(0, 4) },
+        ],
+      };
+    }
+  }
+
+  async browse(opts: FilterOptions): Promise<BrowseResponse> {
+    try {
+      const { data } = await this.client.get<BrowseResponse>('/api/browse', { params: opts });
+      this.demoMode = false;
+      return data;
+    } catch {
+      const page = opts.page ?? 1;
+      const pageSize = opts.pageSize ?? 20;
+      const filtered = demoData.filter((d) => {
+        if (opts.type === 'tvseries') return d.type === 'series';
+        if (opts.type === 'movie') return d.type === 'movie';
+        if (opts.type === 'documentary') return d.type === 'documentary';
+        return true;
+      });
+      const start = (page - 1) * pageSize;
+      const items = filtered.slice(start, start + pageSize);
+      return {
+        items,
+        total: filtered.length,
+        page,
+        pageSize,
+        hasMore: start + pageSize < filtered.length,
+      };
+    }
+  }
+
+  async getHot(): Promise<SearchResult[]> {
+    try {
+      const { data } = await this.client.get<SearchResult[]>('/api/hot');
+      this.demoMode = false;
+      return data;
+    } catch {
+      return demoData.slice(0, 10);
+    }
+  }
+
+  async getLatest(): Promise<{ type: VideoType; items: SearchResult[] }[]> {
+    try {
+      const { data } = await this.client.get<{ type: VideoType; items: SearchResult[] }[]>('/api/latest');
+      this.demoMode = false;
+      return data;
+    } catch {
+      return [
+        { type: 'movie', items: demoData.filter((d) => d.type === 'movie').slice(0, 4) },
+        { type: 'tvseries', items: demoData.filter((d) => d.type === 'series').slice(0, 4) },
+        { type: 'documentary', items: demoData.filter((d) => d.type === 'documentary').slice(0, 4) },
+      ];
+    }
+  }
+
+  async getCategories(): Promise<CategorySection[]> {
+    try {
+      const { data } = await this.client.get<CategorySection[]>('/api/categories');
+      this.demoMode = false;
+      return data;
+    } catch {
+      return [
+        { type: 'movie', label: '电影', icon: '🎬' },
+        { type: 'tvseries', label: '电视剧', icon: '📺' },
+        { type: 'variety', label: '综艺', icon: '🎭' },
+        { type: 'anime', label: '动漫', icon: '🎨' },
+        { type: 'documentary', label: '纪录片', icon: '🌍' },
+        { type: 'shortdrama', label: '短剧', icon: '🎪' },
+        { type: 'sports', label: '体育', icon: '⚽' },
+        { type: 'education', label: '知识', icon: '📚' },
+      ];
     }
   }
 }

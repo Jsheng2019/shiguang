@@ -12,8 +12,12 @@ import {
 } from 'react-native';
 import { Colors } from '../theme/colors';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { api, SearchResult } from '../services/api';
+import { api, SearchResult, HomePageData } from '../services/api';
 import VideoCard from '../components/VideoCard';
+import BannerCarousel from '../components/BannerCarousel';
+import CategoryGrid from '../components/CategoryGrid';
+import HorizontalScrollList from '../components/HorizontalScrollList';
+import LatestSection from '../components/LatestSection';
 import { storage } from '../services/storage';
 import { useI18n } from '../services/i18n';
 
@@ -26,6 +30,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [favoritesCount, setFavoritesCount] = useState(0);
+  const [homeData, setHomeData] = useState<HomePageData | null>(null);
   const isTV = Platform.isTV;
 
   // Load search history and favorites from storage on mount and focus
@@ -62,7 +67,17 @@ export default function HomeScreen() {
 
   useEffect(() => {
     loadTrending();
+    loadHomeData();
   }, [loadTrending]);
+
+  const loadHomeData = useCallback(async () => {
+    try {
+      const data = await api.getHome();
+      setHomeData(data);
+    } catch {
+      // silent fail for initial load
+    }
+  }, []);
 
   const handleSearch = useCallback(async () => {
     if (query.trim()) {
@@ -210,6 +225,22 @@ export default function HomeScreen() {
                   </View>
                   <Text style={styles.favEntryArrow}>{'>'}</Text>
                 </TouchableOpacity>
+              )}
+
+              {/* New section placeholders */}
+              {homeData && (
+                <>
+                  <BannerCarousel banners={homeData.banners} />
+                  <CategoryGrid categories={homeData.categories} />
+                  <View style={styles.sectionPadding}>
+                    <Text style={styles.sectionTitle}>{t('hotRanking')}</Text>
+                  </View>
+                  <HorizontalScrollList title={t('hotRanking')} data={homeData.hotList} />
+                  <View style={styles.sectionPadding}>
+                    <Text style={styles.sectionTitle}>{t('latestUpdates')}</Text>
+                  </View>
+                  <LatestSection data={homeData.latestByCategory} />
+                </>
               )}
 
               {/* Trending header */}
@@ -429,6 +460,10 @@ const styles = StyleSheet.create({
   favEntryArrow: {
     fontSize: 18,
     color: Colors.textSecondary,
+  },
+  sectionPadding: {
+    paddingHorizontal: 14,
+    marginTop: 8,
   },
   trendingHeader: {
     flexDirection: 'row',
