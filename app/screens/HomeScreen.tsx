@@ -100,8 +100,8 @@ export default function HomeScreen() {
           <>
             <View style={styles.headerSection}>
               <View style={styles.header}>
-                <Text style={styles.logo}>Video App</Text>
-                <Text style={styles.tagline}>Search and stream videos</Text>
+                <Text style={styles.logo}>拾光</Text>
+                <Text style={styles.tagline}>从互联网拾取免费光影</Text>
               </View>
 
               <Text style={styles.label}>What do you want to watch?</Text>

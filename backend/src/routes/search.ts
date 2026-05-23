@@ -39,8 +39,10 @@ export function createSearchRouter(
 function sortByRelevance(items: SearchResult[], query: string): SearchResult[] {
   const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
   return [...items].sort((a, b) => {
-    const aScore = tokens.filter((t) => a.title.toLowerCase().includes(t)).length;
-    const bScore = tokens.filter((t) => b.title.toLowerCase().includes(t)).length;
+    const titleA = String(a.title ?? '').toLowerCase();
+    const titleB = String(b.title ?? '').toLowerCase();
+    const aScore = tokens.filter((t) => titleA.includes(t)).length;
+    const bScore = tokens.filter((t) => titleB.includes(t)).length;
     return bScore - aScore;
   });
 }

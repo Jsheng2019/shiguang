@@ -3,6 +3,8 @@ import { ExampleSpider } from './example.js';
 import { InternetArchiveSpider } from './free-kukan.js';
 import { VimeoFreeSpider } from './vimeo-free.js';
 import { YouTubeSpider } from './youtube.js';
+import { PublicDomainTorrentsSpider } from './pdt.js';
+import { BilibiliFreeSpider } from './bilibili-free.js';
 
 export class SpiderRegistry {
   private spiders: Map<string, Spider> = new Map();
@@ -12,6 +14,8 @@ export class SpiderRegistry {
     this.register(new InternetArchiveSpider());
     this.register(new VimeoFreeSpider());
     this.register(new YouTubeSpider());
+    this.register(new PublicDomainTorrentsSpider());
+    this.register(new BilibiliFreeSpider());
   }
 
   register(spider: Spider): void {

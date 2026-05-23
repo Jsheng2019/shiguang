@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Video App",
+    "name": "拾光",
     "slug": "video-app",
     "version": "1.0.0",
     "orientation": "default",
@@ -29,7 +29,9 @@
       ]
     },
     "plugins": [
-      "expo-av"
+      "expo-av",
+      "expo-asset",
+      "expo-font"
     ]
   }
 }
