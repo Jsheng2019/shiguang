@@ -49,6 +49,7 @@ export class BilibiliFreeSpider implements Spider {
       const resultTypes: Array<{ result_type: string; data?: BiliVideoItem[] }> =
         resp.data?.data?.result ?? [];
       const results: SearchResult[] = [];
+      const bvids: (string | undefined)[] = [];
 
       for (const section of resultTypes) {
         if (section.result_type !== 'video') continue;
@@ -60,6 +61,7 @@ export class BilibiliFreeSpider implements Spider {
           const pic = v.pic.startsWith('//') ? `https:${v.pic}` : v.pic;
           const type = this.detectType(v.typename, v.tag || '');
           const rating = this.playToRating(v.play);
+          const sourceUrl = v.arcurl || `https://www.bilibili.com/video/${v.bvid}`;
 
           results.push({
             title,
@@ -68,15 +70,33 @@ export class BilibiliFreeSpider implements Spider {
             rating,
             description: v.description || undefined,
             sourceName: this.name,
-            sourceUrl: v.arcurl,
+            sourceUrl,
             sources: [
               {
-                url: v.arcurl,
+                url: sourceUrl,
                 quality: '720p',
                 format: 'embed',
               },
             ],
           });
+          bvids.push(v.bvid || undefined);
+        }
+      }
+
+      // Enrich top results with real video URLs via player API (parallel)
+      const topN = Math.min(results.length, 10);
+      if (topN > 0) {
+        const enrichResults = await Promise.allSettled(
+          bvids.slice(0, topN).map(bvid =>
+            bvid ? this.extractStreams(bvid) : Promise.resolve([] as VideoSource[]),
+          ),
+        );
+
+        for (let i = 0; i < topN; i++) {
+          const r = enrichResults[i];
+          if (r.status === 'fulfilled' && r.value.length > 0) {
+            results[i].sources = r.value;
+          }
         }
       }
 
@@ -107,7 +127,7 @@ export class BilibiliFreeSpider implements Spider {
       type: 'movie',
       sourceName: this.name,
       sourceUrl: url,
-      sources: sources.length > 0 ? sources : [{ url, quality: '720p', format: 'mp4' }],
+      sources: sources.length > 0 ? sources : [{ url, quality: '720p', format: 'embed' }],
     };
   }
 
@@ -134,7 +154,7 @@ export class BilibiliFreeSpider implements Spider {
             'User-Agent': UA,
             Referer: 'https://www.bilibili.com',
           },
-          timeout: 8000,
+          timeout: 5000,
         },
       );
 

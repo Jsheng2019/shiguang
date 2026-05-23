@@ -71,6 +71,7 @@ export class BilibiliMoviesSpider implements Spider {
       const resultTypes: ResultSection[] =
         resp.data?.data?.result ?? [];
       const results: SearchResult[] = [];
+      const bvids: (string | undefined)[] = [];
 
       for (const section of resultTypes) {
         // Only process video results
@@ -83,6 +84,7 @@ export class BilibiliMoviesSpider implements Spider {
           const pic = v.pic.startsWith('//') ? `https:${v.pic}` : v.pic;
           const type = this.detectType(v.typename, v.tag || '');
           const rating = this.playToRating(v.play);
+          const sourceUrl = v.arcurl || `https://www.bilibili.com/video/${v.bvid}`;
 
           results.push({
             title,
@@ -91,19 +93,41 @@ export class BilibiliMoviesSpider implements Spider {
             rating,
             description: v.description || undefined,
             sourceName: this.name,
-            sourceUrl: v.arcurl,
+            sourceUrl,
             sources: [
               {
-                url: v.arcurl,
+                url: sourceUrl,
                 quality: '720p' as const,
                 format: 'embed' as const,
               },
             ],
           });
+          bvids.push(v.bvid || undefined);
         }
       }
 
-      return results.slice(0, 20);
+      // Limit to 20 results before enriching (so we don't waste API calls)
+      const limited = results.slice(0, 20);
+      const limitedBvids = bvids.slice(0, 20);
+
+      // Enrich top results with real video URLs via player API (parallel)
+      const topN = Math.min(limited.length, 10);
+      if (topN > 0) {
+        const enrichResults = await Promise.allSettled(
+          limitedBvids.slice(0, topN).map(bvid =>
+            bvid ? this.extractStreams(bvid) : Promise.resolve([] as VideoSource[]),
+          ),
+        );
+
+        for (let i = 0; i < topN; i++) {
+          const r = enrichResults[i];
+          if (r.status === 'fulfilled' && r.value.length > 0) {
+            limited[i].sources = r.value;
+          }
+        }
+      }
+
+      return limited;
     } catch {
       return [];
     }
@@ -186,7 +210,7 @@ export class BilibiliMoviesSpider implements Spider {
             'User-Agent': UA,
             Referer: 'https://www.bilibili.com',
           },
-          timeout: 8000,
+          timeout: 5000,
         },
       );
 
