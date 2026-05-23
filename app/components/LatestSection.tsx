@@ -1,29 +1,39 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { VideoType, SearchResult } from '../services/api';
-import { Colors } from '../theme/colors';
+import { useI18n } from '../services/i18n';
+import HorizontalScrollList from './HorizontalScrollList';
 
 interface LatestSectionProps {
-  data: { type: VideoType; items: SearchResult[] }[];
-  onItemPress?: (item: SearchResult) => void;
+  sections: { type: VideoType; items: SearchResult[] }[];
+  onPress: (item: SearchResult) => void;
+  onSeeAll: (type: VideoType) => void;
 }
 
-export default function LatestSection({ data }: LatestSectionProps) {
+export default function LatestSection({ sections, onPress, onSeeAll }: LatestSectionProps) {
+  const { t } = useI18n();
+
+  // Map VideoType to i18n key
+  const typeLabel = (type: VideoType): string => {
+    const key = type as keyof typeof t;
+    const label = t(key as any);
+    return typeof label === 'string' ? label : type;
+  };
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.debug}>LatestSection ({data.length} categories)</Text>
-    </View>
+    <>
+      {sections.map((section) => {
+        if (section.items.length === 0) return null;
+        return (
+          <HorizontalScrollList
+            key={section.type}
+            title={typeLabel(section.type)}
+            items={section.items}
+            onPress={onPress}
+            onSeeAll={() => onSeeAll(section.type)}
+          />
+        );
+      })}
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    paddingVertical: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  debug: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-  },
-});

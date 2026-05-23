@@ -8,6 +8,7 @@ import HomeScreen from './screens/HomeScreen';
 import SearchScreen from './screens/SearchScreen';
 import DetailScreen from './screens/DetailScreen';
 import FavoritesScreen from './screens/FavoritesScreen';
+import CategoryScreen from './screens/CategoryScreen';
 import { I18nProvider, useI18n } from './services/i18n';
 import { Colors } from './theme/colors';
 
@@ -103,6 +104,11 @@ function AppNavigator() {
           name="Favorites"
           component={FavoritesScreen}
           options={{ title: t('favorites') }}
+        />
+        <Stack.Screen
+          name="Category"
+          component={CategoryScreen}
+          options={{ title: t('categories') }}
         />
       </Stack.Navigator>
       <StatusBar style="light" />
