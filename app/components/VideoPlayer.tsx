@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   Platform,
+  Linking,
 } from 'react-native';
 import { ResizeMode, Video, AVPlaybackStatus } from 'expo-av';
 import { VideoSource } from '../services/api';
@@ -29,6 +30,29 @@ function formatTime(ms: number): string {
 
 export default function VideoPlayer({ source, onClose }: VideoPlayerProps) {
   const { t } = useI18n();
+
+  // For embed sources (YouTube, etc.), open externally
+  React.useEffect(() => {
+    if (source.format === 'embed') {
+      Linking.openURL(source.url).catch(() => {});
+      onClose?.();
+    }
+  }, [source.format, source.url, onClose]);
+
+  if (source.format === 'embed') {
+    return (
+      <View style={[styles.container, styles.errorContainer]}>
+        <Text style={styles.errorTitle}>{t('openExternal')}</Text>
+        <TouchableOpacity
+          onPress={() => { Linking.openURL(source.url).catch(() => {}); onClose?.(); }}
+          style={styles.errorBtn}
+        >
+          <Text style={styles.errorBtnText}>{t('openInBrowser')}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   const videoRef = useRef<Video>(null);
   const [status, setStatus] = useState<AVPlaybackStatus | null>(null);
   const [showControls, setShowControls] = useState(true);

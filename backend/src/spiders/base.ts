@@ -2,7 +2,7 @@
 export interface VideoSource {
   url: string;
   quality: '1080p' | '720p' | '480p' | '360p';
-  format: 'hls' | 'dash' | 'mp4';
+  format: 'hls' | 'dash' | 'mp4' | 'embed';
   headers?: Record<string, string>;
 }
 

@@ -3,7 +3,7 @@ import axios from 'axios';
 export interface VideoSource {
   url: string;
   quality: '1080p' | '720p' | '480p' | '360p';
-  format: 'hls' | 'dash' | 'mp4';
+  format: 'hls' | 'dash' | 'mp4' | 'embed';
   headers?: Record<string, string>;
 }
 
@@ -24,6 +24,13 @@ const DEFAULT_BASE_URL =
   typeof window !== 'undefined' && window.location.hostname !== 'localhost'
     ? '' // Use relative path on production web
     : 'http://10.0.2.2:3000';
+
+// Production backend URL — set to Render deployment or your own server.
+// Leave empty to use the same origin (for reverse-proxy setups).
+const BACKEND_URL =
+  typeof window !== 'undefined' && window.location.hostname.includes('github.io')
+    ? 'https://shiguang-backend.onrender.com'
+    : '';
 
 const demoData: SearchResult[] = [
   {
@@ -190,9 +197,11 @@ const demoBackend = {
 class ApiClient {
   private client;
   private demoMode = true;
+  private baseURL: string;
 
   constructor(baseURL: string = DEFAULT_BASE_URL) {
-    this.client = axios.create({ baseURL, timeout: 15000 });
+    this.baseURL = BACKEND_URL || baseURL;
+    this.client = axios.create({ baseURL: this.baseURL, timeout: 15000 });
   }
 
   async search(query: string): Promise<SearchResult[]> {

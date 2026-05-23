@@ -41,6 +41,8 @@ const zh = {
   videoErrorHint: '请检查网络连接后重试',
   delete: '删除',
   confirmDelete: '确认删除？',
+  openExternal: '该视频需在外部打开',
+  openInBrowser: '在浏览器中打开',
   langSwitch: 'EN',
 };
 
@@ -75,6 +77,8 @@ const en: Record<keyof typeof zh, string> = {
   videoErrorHint: 'Check your connection and try again',
   delete: 'Delete',
   confirmDelete: 'Confirm delete?',
+  openExternal: 'This video opens externally',
+  openInBrowser: 'Open in Browser',
   langSwitch: '中',
 };
 

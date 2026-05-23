@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { SearchResult, Spider } from './base.js';
+import type { SearchResult, Spider, VideoSource } from './base.js';
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -11,11 +11,6 @@ interface CuratedVideo {
   year: number;
 }
 
-/**
- * Known free / public-domain videos on Vimeo, used as search candidates.
- * The spider first attempts to scrape Vimeo search HTML, then falls back to
- * matching these curated entries via oEmbed metadata.
- */
 const CURATED: CuratedVideo[] = [
   { id: '1084537', title: 'Night of the Living Dead', type: 'movie', year: 1968 },
   { id: '76979871', title: 'A Trip to the Moon', type: 'movie', year: 1902 },
@@ -37,15 +32,12 @@ export class VimeoFreeSpider implements Spider {
   name = 'vimeo-free';
 
   async search(query: string): Promise<SearchResult[]> {
-    // Attempt to scrape Vimeo search page first
     try {
       const scraped = await this.scrapeSearch(query);
       if (scraped.length > 0) return scraped;
     } catch {
       // fall through to curated
     }
-
-    // Fall back to curated list with oEmbed enrichment
     return this.searchCurated(query);
   }
 
@@ -54,43 +46,82 @@ export class VimeoFreeSpider implements Spider {
     if (!match) return null;
 
     const id = match[1];
-    return this.fetchOembed(id);
+    const [sources, meta] = await Promise.all([
+      this.extractStreams(id),
+      this.fetchOembedMeta(id),
+    ]);
+
+    return {
+      title: meta.title || `Vimeo ${id}`,
+      year: meta.upload_date ? new Date(meta.upload_date).getFullYear() : undefined,
+      type: 'movie',
+      poster: meta.thumbnail_url || undefined,
+      description: meta.description || undefined,
+      sourceName: this.name,
+      sourceUrl: url,
+      sources: sources.length > 0 ? sources : [{ url, quality: '720p', format: 'mp4' }],
+    };
   }
 
-  /** Scrape Vimeo search HTML for initial-state data. */
-  private async scrapeSearch(query: string): Promise<SearchResult[]> {
-    const resp = await axios.get('https://vimeo.com/search', {
-      params: { q: query, sort: 'relevant' },
-      headers: { 'User-Agent': UA },
-      timeout: 5000,
-    });
+  /**
+   * Extract direct MP4 stream URLs from Vimeo's player config endpoint.
+   * This is the same endpoint Vimeo's own web player uses.
+   */
+  private async extractStreams(videoId: string): Promise<VideoSource[]> {
+    try {
+      const resp = await axios.get(
+        `https://player.vimeo.com/video/${videoId}/config`,
+        { headers: { 'User-Agent': UA }, timeout: 8000 },
+      );
 
-    const html: string = resp.data;
-    const results: SearchResult[] = [];
+      const config = resp.data as Record<string, unknown>;
+      const request = config?.request as { files?: { progressive?: Array<{ url: string; quality: string; height: number }> } } | undefined;
+      const progressive = request?.files?.progressive;
+      if (!progressive || progressive.length === 0) return [];
 
-    // Try to extract video data from script tags containing __NUXT__ state
-    const nuxtMatch = html.match(/__NUXT__\s*=\s*({.+?});?\s*<\/script>/);
-    if (nuxtMatch) {
-      try {
-        const nuxt = JSON.parse(nuxtMatch[1]);
-        // Navigate possible paths — Vimeo's Nuxt state shape changes frequently
-        const videos = this.extractFromNuxt(nuxt);
-        if (videos.length > 0) return videos;
-      } catch {
-        // ignore parse errors
+      const sources: VideoSource[] = [];
+      for (const file of progressive) {
+        let quality: VideoSource['quality'] = '720p';
+        if (file.height >= 1080) quality = '1080p';
+        else if (file.height >= 720) quality = '720p';
+        else if (file.height >= 480) quality = '480p';
+        else quality = '360p';
+
+        sources.push({ url: file.url, quality, format: 'mp4' });
       }
-    }
 
-    return results;
+      // Sort best quality first
+      const order: Record<string, number> = { '1080p': 4, '720p': 3, '480p': 2, '360p': 1 };
+      sources.sort((a, b) => (order[b.quality] || 0) - (order[a.quality] || 0));
+
+      return sources;
+    } catch {
+      return [];
+    }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private extractFromNuxt(_nuxt: any): SearchResult[] {
-    // Nuxt state structure on Vimeo is not stable; returning empty triggers fallback
+  private async fetchOembedMeta(id: string): Promise<{
+    title?: string;
+    thumbnail_url?: string;
+    description?: string;
+    upload_date?: string;
+  }> {
+    try {
+      const resp = await axios.get('https://vimeo.com/api/oembed.json', {
+        params: { url: `https://vimeo.com/${id}` },
+        headers: { 'User-Agent': UA },
+        timeout: 5000,
+      });
+      return resp.data as Record<string, string>;
+    } catch {
+      return {};
+    }
+  }
+
+  private async scrapeSearch(_query: string): Promise<SearchResult[]> {
     return [];
   }
 
-  /** Match query against curated videos and fetch live metadata via oEmbed. */
   private async searchCurated(query: string): Promise<SearchResult[]> {
     const qLower = query.toLowerCase();
     const matched = CURATED.filter(
@@ -101,68 +132,22 @@ export class VimeoFreeSpider implements Spider {
 
     const results: SearchResult[] = [];
     for (const video of matched) {
-      const result = await this.fetchOembed(video.id);
-      if (result) {
-        results.push(result);
-      } else {
-        // Push basic entry if oEmbed fails
-        results.push({
-          title: video.title,
-          year: video.year,
-          type: video.type,
-          sourceName: this.name,
-          sourceUrl: `https://vimeo.com/${video.id}`,
-          sources: [
-            {
-              url: `https://vimeo.com/${video.id}`,
-              quality: '720p',
-              format: 'mp4',
-            },
-          ],
-        });
-      }
+      const result = await this.fetchOembedMeta(video.id).then((meta) => ({
+        title: meta.title || video.title,
+        year: meta.upload_date ? new Date(meta.upload_date).getFullYear() : video.year,
+        type: video.type,
+        poster: meta.thumbnail_url || undefined,
+        sourceName: this.name,
+        sourceUrl: `https://vimeo.com/${video.id}`,
+        sources: [{
+          url: `https://vimeo.com/${video.id}`,
+          quality: '720p' as const,
+          format: 'mp4' as const,
+        }],
+      }));
+      results.push(result);
     }
 
     return results;
-  }
-
-  /** Fetch video metadata from Vimeo oEmbed endpoint. */
-  private async fetchOembed(id: string): Promise<SearchResult | null> {
-    try {
-      const resp = await axios.get('https://vimeo.com/api/oembed.json', {
-        params: { url: `https://vimeo.com/${id}` },
-        headers: { 'User-Agent': UA },
-        timeout: 5000,
-      });
-
-      const data = resp.data as {
-        title?: string;
-        thumbnail_url?: string;
-        description?: string;
-        author_name?: string;
-        upload_date?: string;
-      };
-
-      return {
-        title: data.title || `Vimeo ${id}`,
-        year: data.upload_date
-          ? new Date(data.upload_date).getFullYear()
-          : undefined,
-        type: 'movie',
-        poster: data.thumbnail_url || undefined,
-        description: data.description || undefined,
-        sourceName: this.name,
-        sourceUrl: `https://vimeo.com/${id}`,
-        sources: [
-          {
-            url: `https://vimeo.com/${id}`,
-            quality: '720p',
-            format: 'mp4',
-          },
-        ],
-      };
-    } catch {
-      return null;
-    }
   }
 }

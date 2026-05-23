@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { SearchResult, Spider } from './base.js';
+import type { SearchResult, Spider, VideoSource } from './base.js';
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -7,6 +7,8 @@ const UA =
 interface BiliVideoItem {
   title: string;
   arcurl: string;
+  bvid: string;
+  aid: number;
   pic: string;
   duration: string;
   author: string;
@@ -16,11 +18,15 @@ interface BiliVideoItem {
   play: number;
 }
 
-/**
- * Bilibili free video spider — searches public videos on Bilibili.
- * Uses the official search API (no auth required). Supports both
- * Chinese and English queries.
- */
+interface BiliPlayUrlData {
+  durl?: Array<{ url: string; size: number }>;
+  dash?: {
+    video: Array<{ id: number; baseUrl: string; bandwidth: number; width: number; height: number }>;
+  };
+  quality: number;
+  accept_description: string[];
+}
+
 export class BilibiliFreeSpider implements Spider {
   name = 'bilibili-free';
 
@@ -52,11 +58,7 @@ export class BilibiliFreeSpider implements Spider {
           if (!title) continue;
 
           const pic = v.pic.startsWith('//') ? `https:${v.pic}` : v.pic;
-
-          // Determine content type from typename / tags
           const type = this.detectType(v.typename, v.tag || '');
-
-          // Convert play count to a 0-10 rating proxy
           const rating = this.playToRating(v.play);
 
           results.push({
@@ -85,37 +87,98 @@ export class BilibiliFreeSpider implements Spider {
   }
 
   async getDetail(url: string): Promise<SearchResult | null> {
-    // Bilibili's video detail API (x/web-interface/view) is available
-    // but the page URL itself is the most reliable access method
+    // Extract bvid from URL
+    const bvidMatch = url.match(/BV[\w]+/);
+    const avMatch = url.match(/av(\d+)/);
+
+    let sources: VideoSource[] = [];
+
+    if (bvidMatch) {
+      sources = await this.extractStreams(bvidMatch[0]);
+    } else if (avMatch) {
+      sources = await this.extractStreams(undefined, parseInt(avMatch[1]));
+    }
+
     const title =
       url.split('/').pop()?.replace(/[/?&]/g, '_') || 'Bilibili Video';
+
     return {
       title,
       type: 'movie',
       sourceName: this.name,
       sourceUrl: url,
-      sources: [{ url, quality: '720p', format: 'mp4' }],
+      sources: sources.length > 0 ? sources : [{ url, quality: '720p', format: 'mp4' }],
     };
+  }
+
+  /**
+   * Extract actual video stream URLs from Bilibili's player API.
+   * Returns direct MP4 URLs that can be played in expo-av.
+   */
+  private async extractStreams(bvid?: string, avid?: number): Promise<VideoSource[]> {
+    try {
+      const params: Record<string, string | number> = {
+        qn: 80, // 1080p
+        fnval: 1, // return durl (progressive download URLs)
+        fourk: 1,
+      };
+      if (bvid) params.bvid = bvid;
+      else if (avid) params.avid = avid;
+      else return [];
+
+      const resp = await axios.get(
+        'https://api.bilibili.com/x/player/playurl',
+        {
+          params,
+          headers: {
+            'User-Agent': UA,
+            Referer: 'https://www.bilibili.com',
+          },
+          timeout: 8000,
+        },
+      );
+
+      const data = resp.data?.data as BiliPlayUrlData | undefined;
+      if (!data?.durl) return [];
+
+      const sources: VideoSource[] = [];
+      const qualityLabels = data.accept_description || [];
+      const bestQuality = qualityLabels[0] || '720P';
+
+      const qMap: Record<string, VideoSource['quality']> = {
+        '1080P': '1080p', '1080p': '1080p',
+        '720P': '720p', '720p': '720p',
+        '480P': '480p', '480p': '480p',
+        '360P': '360p', '360p': '360p',
+      };
+
+      for (const d of data.durl) {
+        if (!d.url) continue;
+        sources.push({
+          url: d.url,
+          quality: qMap[bestQuality] || '720p',
+          format: 'mp4',
+        });
+      }
+
+      return sources;
+    } catch {
+      return [];
+    }
   }
 
   private detectType(typename: string, tag: string): SearchResult['type'] {
     const t = typename.toLowerCase();
     const tg = tag.toLowerCase();
-    // Check both typename and tags for type hints
     if (
-      t.includes('纪录') ||
-      t.includes('记录') ||
-      tg.includes('纪录片') ||
-      tg.includes('documentary')
+      t.includes('纪录') || t.includes('记录') ||
+      tg.includes('纪录片') || tg.includes('documentary')
     )
       return 'documentary';
     if (t.includes('电影') || t.includes('影视') || tg.includes('电影')) return 'movie';
     if (
-      t.includes('剧集') ||
-      t.includes('连载') ||
-      t.includes('番剧') ||
-      t.includes('动画') ||
-      tg.includes('番剧')
+      t.includes('剧集') || t.includes('连载') || t.includes('番剧') ||
+      t.includes('动画') || tg.includes('番剧')
     )
       return 'series';
     return 'movie';
