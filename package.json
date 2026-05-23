@@ -1,0 +1,27 @@
+{
+  "name": "video-app",
+  "version": "1.0.0",
+  "description": "跨平台视频搜索和播放应用。从互联网各处拾取免费光影资源，聚合多个公开视频源，在统一的移动端和 TV 端界面中浏览和播放。",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jsheng2019/shiguang.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Jsheng2019/shiguang/issues"
+  },
+  "homepage": "https://github.com/Jsheng2019/shiguang#readme",
+  "dependencies": {
+    "playwright": "^1.60.0"
+  }
+}

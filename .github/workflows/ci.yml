@@ -81,64 +81,28 @@ jobs:
           publish_dir: .
           force_orphan: true
 
-  smoke-test:
-    name: PM — Smoke Test
+  pm-e2e-test:
+    name: PM — Playwright E2E Test
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: deploy-web
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for GitHub Pages cache
-        run: sleep 15
-      - name: Check page loads
-        run: |
-          HTTP=$(curl -s -o /dev/null -w "%{http_code}" "https://jsheng2019.github.io/shiguang/")
-          if [ "$HTTP" != "200" ]; then
-            echo "FAIL: Page returned HTTP $HTTP"
-            exit 1
-          fi
-          echo "PASS: Page loads (HTTP 200)"
-      - name: Check JS bundle loads
-        run: |
-          HTML=$(curl -s "https://jsheng2019.github.io/shiguang/")
-          JS_FILE=$(echo "$HTML" | grep -oP 'src="\./_expo/static/js/web/[^"]+\.js"' | head -1 | sed 's/src="//;s/"//')
-          if [ -z "$JS_FILE" ]; then
-            echo "FAIL: No JS bundle found in HTML"
-            exit 1
-          fi
-          JS_URL="https://jsheng2019.github.io/shiguang/${JS_FILE#./}"
-          JS_HTTP=$(curl -s -o /dev/null -w "%{http_code}" "$JS_URL")
-          if [ "$JS_HTTP" != "200" ]; then
-            echo "FAIL: JS bundle returned HTTP $JS_HTTP"
-            exit 1
-          fi
-          echo "PASS: JS bundle loads ($JS_FILE)"
-      - name: Check demo content
-        run: |
-          HTML=$(curl -s "https://jsheng2019.github.io/shiguang/")
-          JS_FILE=$(echo "$HTML" | grep -oP 'src="\./_expo/static/js/web/[^"]+\.js"' | head -1 | sed 's/src="//;s/"//')
-          JS_URL="https://jsheng2019.github.io/shiguang/${JS_FILE#./}"
-          # Check demo data is in JS bundle (Unicode escape for 大闹天宫)
-          if curl -s "$JS_URL" | grep -q '\\\\u5927\\\\u95f9\\\\u5929\\\\u5bab'; then
-            echo "PASS: Demo content present in JS bundle"
-          else
-            echo "FAIL: Demo content missing from JS bundle"
-            exit 1
-          fi
-      - name: Check basic accessibility
-        run: |
-          HTML=$(curl -s "https://jsheng2019.github.io/shiguang/")
-          CHECKS=(
-            "<title>拾光 - 免费影视</title>"
-            'id="root"'
-            "<noscript>"
-            "background: #0f0f0f"
-          )
-          for check in "${CHECKS[@]}"; do
-            if echo "$HTML" | grep -qF "$check"; then
-              echo "PASS: Found '$check'"
-            else
-              echo "FAIL: Missing '$check'"
-              exit 1
-            fi
-          done
-          echo "--- All accessibility checks passed ---"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Playwright
+        run: npm install playwright
+      - name: Install Chromium
+        run: npx playwright install chromium --with-deps
+      - name: Wait for deployments
+        run: sleep 20
+      - name: Run E2E test
+        run: node tests/pm-smoke-test.mjs
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pm-screenshots
+          path: /tmp/pm-screenshot-*.png
+          retention-days: 3
