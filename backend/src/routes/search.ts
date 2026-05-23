@@ -1,8 +1,12 @@
 import { Router } from 'express';
 import type { SpiderRegistry } from '../spiders/registry.js';
 import type { SearchResult } from '../spiders/base.js';
+import type { TmdbService } from '../services/tmdb.js';
 
-export function createSearchRouter(registry: SpiderRegistry): Router {
+export function createSearchRouter(
+  registry: SpiderRegistry,
+  tmdb?: TmdbService,
+): Router {
   const router = Router();
 
   router.get('/search', async (req, res, next) => {
@@ -13,7 +17,13 @@ export function createSearchRouter(registry: SpiderRegistry): Router {
         return;
       }
 
-      const results = await registry.searchAll(q);
+      let results = await registry.searchAll(q);
+
+      // Optionally enrich with TMDB metadata
+      if (tmdb?.enabled) {
+        results = await tmdb.enrichSearchResults(results);
+      }
+
       const sorted = sortByRelevance(results, q);
 
       res.json({ results: sorted, total: sorted.length });

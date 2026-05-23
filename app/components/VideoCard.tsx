@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -15,9 +15,41 @@ interface VideoCardProps {
   onPress: () => void;
   isTV?: boolean;
   focused?: boolean;
+  skeleton?: boolean;
 }
 
-export default function VideoCard({ item, onPress, isTV, focused }: VideoCardProps) {
+function RatingBadge({ rating }: { rating: number }) {
+  const stars = rating >= 7 ? '★★★★★' :
+    rating >= 5 ? '★★★★' :
+    rating >= 3 ? '★★★' : '★★';
+  const color = rating >= 7 ? Colors.success : rating >= 5 ? Colors.warning : Colors.textSecondary;
+  return (
+    <View style={[styles.ratingBadge, { backgroundColor: color + '33' }]}>
+      <Text style={[styles.ratingText, { color }]}>{stars}</Text>
+      <Text style={[styles.ratingNum, { color }]}>{rating.toFixed(1)}</Text>
+    </View>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <View style={[styles.card, styles.skeletonCard]}>
+      <View style={styles.posterContainer}>
+        <View style={[styles.poster, styles.skeletonPoster]} />
+      </View>
+      <View style={styles.info}>
+        <View style={[styles.skeletonLine, { width: '80%' }]} />
+        <View style={[styles.skeletonLine, { width: '50%', marginTop: 6 }]} />
+      </View>
+    </View>
+  );
+}
+
+export default function VideoCard({ item, onPress, isTV, focused, skeleton }: VideoCardProps) {
+  const [imgError, setImgError] = useState(false);
+
+  if (skeleton) return <SkeletonCard />;
+
   const qualityBadge =
     item.sources.length > 0
       ? [...new Set(item.sources.map((s) => s.quality))].sort().reverse().join('/')
@@ -30,17 +62,24 @@ export default function VideoCard({ item, onPress, isTV, focused }: VideoCardPro
       style={[styles.card, isTV && styles.tvCard, focused && styles.focused]}
     >
       <View style={styles.posterContainer}>
-        {item.poster ? (
-          <Image source={{ uri: item.poster }} style={styles.poster} />
+        {item.poster && !imgError ? (
+          <Image
+            source={{ uri: item.poster }}
+            style={styles.poster}
+            onError={() => setImgError(true)}
+          />
         ) : (
           <View style={styles.placeholder}>
             <Text style={styles.placeholderText}>?</Text>
           </View>
         )}
-        {qualityBadge && (
+        {qualityBadge && !imgError && (
           <View style={styles.qualityBadge}>
             <Text style={styles.qualityText}>{qualityBadge}</Text>
           </View>
+        )}
+        {item.rating != null && (
+          <RatingBadge rating={item.rating} />
         )}
       </View>
       <View style={styles.info}>
@@ -67,6 +106,8 @@ export default function VideoCard({ item, onPress, isTV, focused }: VideoCardPro
   );
 }
 
+export { RatingBadge, SkeletonCard };
+
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.card,
@@ -74,6 +115,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     margin: 6,
     width: 160,
+  },
+  skeletonCard: {
+    opacity: 0.5,
   },
   tvCard: {
     width: 220,
@@ -92,6 +136,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
+  },
+  skeletonPoster: {
+    backgroundColor: Colors.surface,
   },
   placeholder: {
     flex: 1,
@@ -116,6 +163,24 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 10,
     fontWeight: '600',
+  },
+  ratingBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 3,
+  },
+  ratingText: {
+    fontSize: 9,
+  },
+  ratingNum: {
+    fontSize: 9,
+    fontWeight: '700',
   },
   info: {
     padding: 8,
@@ -150,5 +215,10 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     fontSize: 10,
     marginTop: 2,
+  },
+  skeletonLine: {
+    height: 10,
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: 4,
   },
 });

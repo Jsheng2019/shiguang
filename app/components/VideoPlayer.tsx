@@ -15,6 +15,8 @@ interface VideoPlayerProps {
   onClose?: () => void;
 }
 
+const SPEEDS = [0.5, 1, 1.5, 2] as const;
+
 function formatTime(ms: number): string {
   if (!isFinite(ms) || ms < 0) return '0:00';
   const totalSec = Math.floor(ms / 1000);
@@ -27,11 +29,22 @@ export default function VideoPlayer({ source, onClose }: VideoPlayerProps) {
   const videoRef = useRef<Video>(null);
   const [status, setStatus] = useState<AVPlaybackStatus | null>(null);
   const [showControls, setShowControls] = useState(true);
+  const [speedIdx, setSpeedIdx] = useState(1); // default 1x
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const progressTrackRef = useRef<View>(null);
+  const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isPlaying = status?.isLoaded ? status.isPlaying : false;
   const position = status?.isLoaded ? status.positionMillis ?? 0 : 0;
   const duration = status?.isLoaded ? status.durationMillis ?? 0 : 0;
   const progress = duration > 0 ? position / duration : 0;
+
+  const hideControlsAfterDelay = useCallback(() => {
+    if (controlsTimer.current) clearTimeout(controlsTimer.current);
+    controlsTimer.current = setTimeout(() => {
+      setShowControls(false);
+    }, 4000);
+  }, []);
 
   const togglePlay = useCallback(async () => {
     if (!videoRef.current) return;
@@ -40,23 +53,67 @@ export default function VideoPlayer({ source, onClose }: VideoPlayerProps) {
     } else {
       await videoRef.current.playAsync();
     }
-  }, [isPlaying]);
+    hideControlsAfterDelay();
+  }, [isPlaying, hideControlsAfterDelay]);
 
   const seek = useCallback(
     async (deltaMs: number) => {
       if (!videoRef.current) return;
       const newPos = Math.min(Math.max(position + deltaMs, 0), duration);
       await videoRef.current.setPositionAsync(newPos);
+      hideControlsAfterDelay();
     },
-    [position, duration],
+    [position, duration, hideControlsAfterDelay],
   );
 
   const toggleControls = useCallback(() => {
-    setShowControls((v) => !v);
-  }, []);
+    setShowControls((v) => {
+      if (!v) hideControlsAfterDelay();
+      return !v;
+    });
+  }, [hideControlsAfterDelay]);
+
+  const cycleSpeed = useCallback(async () => {
+    const nextIdx = (speedIdx + 1) % SPEEDS.length;
+    setSpeedIdx(nextIdx);
+    if (videoRef.current) {
+      await videoRef.current.setRateAsync(SPEEDS[nextIdx], true);
+    }
+    hideControlsAfterDelay();
+  }, [speedIdx, hideControlsAfterDelay]);
+
+  const toggleFullscreen = useCallback(async () => {
+    if (!videoRef.current) return;
+    try {
+      if (isFullscreen) {
+        await videoRef.current.dismissFullscreenPlayer();
+      } else {
+        await videoRef.current.presentFullscreenPlayer();
+      }
+      setIsFullscreen(!isFullscreen);
+    } catch {
+      // fullscreen not supported on this platform
+    }
+    hideControlsAfterDelay();
+  }, [isFullscreen, hideControlsAfterDelay]);
+
+  const handleProgressBarPress = useCallback(
+    async (event: { nativeEvent: { locationX: number } }) => {
+      if (!videoRef.current || !duration) return;
+      progressTrackRef.current?.measureInWindow((x, y, width) => {
+        const ratio = Math.max(0, Math.min(1, event.nativeEvent.locationX / width));
+        const newPos = ratio * duration;
+        videoRef.current?.setPositionAsync(newPos);
+      });
+      hideControlsAfterDelay();
+    },
+    [duration, hideControlsAfterDelay],
+  );
+
+  const currentSpeed = SPEEDS[speedIdx];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isFullscreen && styles.fullscreen]}>
       <TouchableOpacity activeOpacity={1} onPress={toggleControls} style={styles.touchArea}>
         <Video
           ref={videoRef}
@@ -71,13 +128,20 @@ export default function VideoPlayer({ source, onClose }: VideoPlayerProps) {
 
       {showControls && (
         <View style={styles.controls} pointerEvents="box-none">
+          {/* Top bar */}
           <View style={styles.topBar}>
             <TouchableOpacity onPress={onClose} style={styles.btn}>
               <Text style={styles.btnText}>X</Text>
             </TouchableOpacity>
-            <Text style={styles.quality}>{source.quality}</Text>
+            <View style={styles.topRight}>
+              <TouchableOpacity onPress={cycleSpeed} style={styles.speedBtn}>
+                <Text style={styles.speedText}>{currentSpeed}x</Text>
+              </TouchableOpacity>
+              <Text style={styles.quality}>{source.quality}</Text>
+            </View>
           </View>
 
+          {/* Center controls */}
           <View style={styles.centerRow}>
             <TouchableOpacity onPress={() => seek(-10000)} style={styles.sideBtn}>
               <Text style={styles.sideBtnText}>{'<<'} 10s</Text>
@@ -90,13 +154,24 @@ export default function VideoPlayer({ source, onClose }: VideoPlayerProps) {
             </TouchableOpacity>
           </View>
 
+          {/* Bottom bar */}
           <View style={styles.bottomBar}>
             <Text style={styles.time}>{formatTime(position)}</Text>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { flex: progress }]} />
-              <View style={{ flex: Math.max(1 - progress, 0.001) }} />
-            </View>
+            <TouchableOpacity
+              activeOpacity={1}
+              style={styles.progressTrack}
+              onPress={handleProgressBarPress}
+              ref={progressTrackRef}
+            >
+              <View style={styles.progressTrackBg}>
+                <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+              </View>
+              <View style={[styles.progressThumb, { left: `${progress * 100}%` }]} />
+            </TouchableOpacity>
             <Text style={styles.time}>{formatTime(duration)}</Text>
+            <TouchableOpacity onPress={toggleFullscreen} style={styles.btn}>
+              <Text style={styles.btnIcon}>{isFullscreen ? '↙' : '↗'}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -110,6 +185,11 @@ const styles = StyleSheet.create({
     aspectRatio: 16 / 9,
     backgroundColor: '#000',
     justifyContent: 'center',
+  },
+  fullscreen: {
+    ...StyleSheet.absoluteFillObject,
+    aspectRatio: undefined,
+    zIndex: 999,
   },
   touchArea: {
     ...StyleSheet.absoluteFillObject,
@@ -129,6 +209,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: Platform.OS === 'ios' ? 50 : 12,
   },
+  topRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   btn: {
     width: 36,
     height: 36,
@@ -140,6 +225,21 @@ const styles = StyleSheet.create({
   btnText: {
     color: Colors.text,
     fontSize: 16,
+    fontWeight: '700',
+  },
+  btnIcon: {
+    color: Colors.text,
+    fontSize: 16,
+  },
+  speedBtn: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  speedText: {
+    color: Colors.warning,
+    fontSize: 13,
     fontWeight: '700',
   },
   quality: {
@@ -190,14 +290,28 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     flex: 1,
+    height: 24,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  progressTrackBg: {
     height: 4,
     backgroundColor: Colors.textTertiary,
     borderRadius: 2,
-    flexDirection: 'row',
     overflow: 'hidden',
   },
   progressFill: {
+    height: '100%',
     backgroundColor: Colors.primary,
     borderRadius: 2,
+  },
+  progressThumb: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: Colors.primary,
+    marginLeft: -7,
+    top: 5,
   },
 });

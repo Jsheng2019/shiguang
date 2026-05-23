@@ -13,6 +13,8 @@ export interface SearchResult {
   type: 'movie' | 'series' | 'documentary';
   country?: string;
   poster?: string;
+  rating?: number;
+  description?: string;
   sources: VideoSource[];
   sourceName: string;
   sourceUrl: string;

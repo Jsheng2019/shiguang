@@ -3,11 +3,19 @@ import cors from 'cors';
 import { SpiderRegistry } from './spiders/registry.js';
 import { createSearchRouter } from './routes/search.js';
 import { createDetailRouter } from './routes/detail.js';
+import { TmdbService } from './services/tmdb.js';
 
 const app = express();
 const PORT = Number(process.env['PORT']) || 3000;
 
 const registry = new SpiderRegistry();
+const tmdb = new TmdbService();
+
+if (tmdb.enabled) {
+  console.log('TMDB metadata enrichment enabled');
+} else {
+  console.log('TMDB disabled (set TMDB_API_KEY to enable)');
+}
 
 app.use(cors());
 app.use(express.json());
@@ -18,8 +26,8 @@ app.get('/api/health', (_req, res) => {
 });
 
 // Routes
-app.use('/api', createSearchRouter(registry));
-app.use('/api', createDetailRouter(registry));
+app.use('/api', createSearchRouter(registry, tmdb));
+app.use('/api', createDetailRouter(registry, tmdb));
 
 // Global error handler
 app.use(

@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import type { SpiderRegistry } from '../spiders/registry.js';
+import type { TmdbService } from '../services/tmdb.js';
 
-export function createDetailRouter(registry: SpiderRegistry): Router {
+export function createDetailRouter(
+  registry: SpiderRegistry,
+  tmdb?: TmdbService,
+): Router {
   const router = Router();
 
   router.get('/detail', async (req, res, next) => {
@@ -22,10 +26,15 @@ export function createDetailRouter(registry: SpiderRegistry): Router {
         return;
       }
 
-      const result = await spider.getDetail(url);
+      let result = await spider.getDetail(url);
       if (!result) {
         res.status(404).json({ error: 'not found' });
         return;
+      }
+
+      // Optionally enrich with TMDB metadata
+      if (tmdb?.enabled) {
+        result = await tmdb.enrichDetail(result);
       }
 
       res.json({ result });

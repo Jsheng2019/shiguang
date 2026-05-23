@@ -1,6 +1,8 @@
 import type { SearchResult, Spider } from './base.js';
 import { ExampleSpider } from './example.js';
 import { InternetArchiveSpider } from './free-kukan.js';
+import { VimeoFreeSpider } from './vimeo-free.js';
+import { YouTubeSpider } from './youtube.js';
 
 export class SpiderRegistry {
   private spiders: Map<string, Spider> = new Map();
@@ -8,6 +10,8 @@ export class SpiderRegistry {
   constructor() {
     this.register(new ExampleSpider());
     this.register(new InternetArchiveSpider());
+    this.register(new VimeoFreeSpider());
+    this.register(new YouTubeSpider());
   }
 
   register(spider: Spider): void {

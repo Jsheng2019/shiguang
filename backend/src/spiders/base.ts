@@ -12,6 +12,8 @@ export interface SearchResult {
   type: 'movie' | 'series' | 'documentary';
   country?: string;
   poster?: string;
+  rating?: number;
+  description?: string;
   sources: VideoSource[];
   sourceName: string;     // which spider found this
   sourceUrl: string;      // original page URL

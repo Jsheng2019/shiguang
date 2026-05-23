@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,8 @@ type SearchParams = {
   Search: { query: string };
 };
 
-const DEBOUNCE_MS = 500;
+const SUGGESTIONS = ['action', 'comedy', 'drama', 'thriller', 'sci-fi', 'animation'];
+const DEBOUNCE_MS = 400;
 
 export default function SearchScreen() {
   const navigation = useNavigation<any>();
@@ -29,13 +30,16 @@ export default function SearchScreen() {
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTV = Platform.isTV;
 
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) {
       setResults([]);
       setError(null);
+      setInitialLoading(false);
       return;
     }
     setLoading(true);
@@ -44,25 +48,64 @@ export default function SearchScreen() {
       const data = await api.search(q.trim());
       setResults(data);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Search failed';
+      const msg = e instanceof Error ? e.message : 'Search failed. Check your connection and try again.';
       setError(msg);
     } finally {
       setLoading(false);
+      setInitialLoading(false);
     }
   }, []);
 
+  // Initial search on mount
   useEffect(() => {
-    const timer = setTimeout(() => doSearch(query), DEBOUNCE_MS);
-    return () => clearTimeout(timer);
+    doSearch(initialQuery);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounced search on query change
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => doSearch(query), DEBOUNCE_MS);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [query, doSearch]);
 
   const handlePress = (item: SearchResult) => {
     navigation.navigate('Detail', { item });
   };
 
+  const handleSuggestion = (s: string) => {
+    setQuery(s);
+  };
+
   const renderItem = ({ item }: { item: SearchResult }) => (
     <VideoCard item={item} onPress={() => handlePress(item)} isTV={isTV} />
   );
+
+  const renderSkeleton = () => {
+    const skeletons = Array(6).fill(null);
+    return (
+      <FlatList
+        data={skeletons}
+        renderItem={() => (
+          <VideoCard
+            item={{} as SearchResult}
+            onPress={() => {}}
+            isTV={isTV}
+            skeleton
+          />
+        )}
+        keyExtractor={(_, idx) => 'skeleton-' + String(idx)}
+        numColumns={isTV ? 4 : 2}
+        contentContainerStyle={styles.list}
+        columnWrapperStyle={!isTV ? styles.row : undefined}
+        scrollEnabled={false}
+      />
+    );
+  };
+
+  const showEmpty =
+    !loading && !initialLoading && !error && results.length === 0 && query.trim() !== '';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -75,10 +118,15 @@ export default function SearchScreen() {
           onChangeText={setQuery}
           autoFocus
           returnKeyType="search"
+          onSubmitEditing={() => doSearch(query)}
         />
       </View>
 
-      {loading && (
+      {/* Skeleton loading state */}
+      {initialLoading && renderSkeleton()}
+
+      {/* Spinner overlay when refining search */}
+      {loading && !initialLoading && (
         <ActivityIndicator
           size="large"
           color={Colors.primary}
@@ -86,6 +134,7 @@ export default function SearchScreen() {
         />
       )}
 
+      {/* Error state */}
       {error && (
         <View style={styles.centerBox}>
           <Text style={styles.errorText}>{error}</Text>
@@ -95,22 +144,39 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {!loading && !error && results.length === 0 && query.trim() !== '' && (
+      {/* Empty state with suggestions */}
+      {showEmpty && (
         <View style={styles.centerBox}>
-          <Text style={styles.emptyText}>No results found</Text>
+          <Text style={styles.emptyIcon}>?</Text>
+          <Text style={styles.emptyTitle}>No results found</Text>
+          <Text style={styles.emptySub}>Try a different keyword:</Text>
+          <View style={styles.suggestionRow}>
+            {SUGGESTIONS.map((s) => (
+              <TouchableOpacity
+                key={s}
+                style={styles.suggestionChip}
+                onPress={() => handleSuggestion(s)}
+              >
+                <Text style={styles.suggestionText}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
       )}
 
-      <FlatList
-        data={results}
-        renderItem={renderItem}
-        keyExtractor={(_, idx) => String(idx)}
-        numColumns={isTV ? 4 : 2}
-        contentContainerStyle={styles.list}
-        columnWrapperStyle={!isTV ? styles.row : undefined}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      />
+      {/* Results grid */}
+      {!initialLoading && results.length > 0 && (
+        <FlatList
+          data={results}
+          renderItem={renderItem}
+          keyExtractor={(_, idx) => String(idx)}
+          numColumns={isTV ? 4 : 2}
+          contentContainerStyle={styles.list}
+          columnWrapperStyle={!isTV ? styles.row : undefined}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -142,11 +208,13 @@ const styles = StyleSheet.create({
   centerBox: {
     alignItems: 'center',
     paddingVertical: 40,
+    paddingHorizontal: 20,
   },
   errorText: {
     color: Colors.error,
     fontSize: 14,
     marginBottom: 12,
+    textAlign: 'center',
   },
   retryBtn: {
     backgroundColor: Colors.primary,
@@ -158,9 +226,39 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontWeight: '600',
   },
-  emptyText: {
+  emptyIcon: {
+    fontSize: 48,
+    color: Colors.textTertiary,
+    marginBottom: 12,
+  },
+  emptyTitle: {
     color: Colors.textSecondary,
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  emptySub: {
+    color: Colors.textTertiary,
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  suggestionChip: {
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  suggestionText: {
+    color: Colors.textSecondary,
+    fontSize: 13,
   },
   list: {
     padding: 8,
