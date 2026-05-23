@@ -116,13 +116,21 @@ export class HomeAggregator {
 
     const settled = await Promise.allSettled(
       categoryQueries.map((cq) =>
-        this.registry.searchAll(cq.query).then((results) => ({
-          type: cq.type,
-          items: results
-            .filter((r) => !this.isPlaceholder(r))
-            .filter((r) => r.type === cq.type)
-            .slice(0, 12),
-        })),
+        this.registry.searchAll(cq.query).then((results) => {
+          let items = results.filter((r) => !this.isPlaceholder(r));
+
+          // Try exact type match first (for movie/tvseries/documentary where
+          // spiders assign those types). For other categories (variety, anime,
+          // shortdrama, sports, education) no spider returns those types, so
+          // fall back to all results — the search query already targets the
+          // right content (e.g. "综艺" for variety, "动漫" for anime).
+          const typeMatched = items.filter((r) => r.type === cq.type);
+          if (typeMatched.length > 0) {
+            items = typeMatched;
+          }
+
+          return { type: cq.type, items: items.slice(0, 12) };
+        }),
       ),
     );
 

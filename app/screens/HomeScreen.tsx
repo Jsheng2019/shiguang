@@ -39,16 +39,23 @@ export default function HomeScreen() {
   const [watchRecords, setWatchRecords] = useState<WatchRecord[]>([]);
 
   useEffect(() => {
+    // Safety timeout: force loading to false after 10s even if the API
+    // hangs (e.g. TCP connection stalls that bypass axios timeout).
+    const safetyTimer = setTimeout(() => setLoading(false), 10000);
+
     (async () => {
       try {
         const data = await api.getHome();
-        setHomeData(data);
+        if (data) setHomeData(data);
       } catch {
         // api.getHome() falls back to demo data internally
       } finally {
         setLoading(false);
+        clearTimeout(safetyTimer);
       }
     })();
+
+    return () => clearTimeout(safetyTimer);
   }, []);
 
   useEffect(() => {
@@ -237,6 +244,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
+  },
+  logo: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.text,
   },
   headerRight: {
     flexDirection: 'row',
